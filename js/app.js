@@ -91,7 +91,17 @@ async function init() {
   if (changed) store.saveSites(state.sites);
 
   applyTheme(); applyWallpaper();
-  renderGroupFilter(); renderTagFilter(); renderList(); renderRegistry(); renderModelList();
+  renderGroupFilter(); renderTagFilter(); renderList(); renderRegistry(); 
+  
+  try {
+    renderModelList();
+  } catch(e) {
+    console.warn("本地模型数据格式过旧，已清理缓存。", e);
+    state.modelPrices = [];
+    store.savePrices([]);
+    renderModelList();
+  }
+  
   updateFilterUI(); updateRegFilterUI(); updateModelFilterUI(); bindEvents();
 }
 
@@ -127,6 +137,7 @@ function updateModelFilterUI() { const c = document.getElementById("modelFilterC
 
 function renderGroupFilter() {
   const wrap = document.getElementById("groupFilter");
+  if(!wrap) return;
   const chips = [`<span class="chip ${state.filterGroup === "all" ? "active" : ""}" data-group="all">全部</span>`];
   state.settings.groups.forEach(g => chips.push(`<span class="chip ${state.filterGroup === g ? "active" : ""}" data-group="${esc(g)}">${esc(g)}</span>`));
   wrap.innerHTML = chips.join("");
@@ -134,6 +145,7 @@ function renderGroupFilter() {
 }
 function renderTagFilter() {
   const wrap = document.getElementById("tagFilter");
+  if(!wrap) return;
   wrap.innerHTML = state.settings.tags.map(t => `<span class="chip ${state.filterTags.includes(t) ? "active" : ""}" data-tag="${esc(t)}">${esc(t)}</span>`).join("");
   wrap.querySelectorAll(".chip").forEach(c => { c.onclick = () => { const t = c.dataset.tag; const i = state.filterTags.indexOf(t); if (i >= 0) state.filterTags.splice(i, 1); else state.filterTags.push(t); renderTagFilter(); renderList(); }; });
 }
@@ -164,6 +176,7 @@ function sortSites(arr) {
 
 function renderList() {
   const wrap = document.getElementById("siteList");
+  if(!wrap) return;
   const all = getFilteredSites();
   if (!all.length) { wrap.innerHTML = `<div class="empty">没有匹配的站点</div>`; return; }
   const groups = [...state.settings.groups];
@@ -379,7 +392,7 @@ function openSiteForm(id) {
 
 /* ====== 模型页与真实拉取逻辑 ====== */
 function getProvider(modelName) {
-  const n = modelName.toLowerCase();
+  const n = (modelName || "").toLowerCase();
   if (n.includes("gpt") || n.includes("dall-e") || n.includes("whisper")) return "OpenAI";
   if (n.includes("claude")) return "Anthropic";
   if (n.includes("gemini") || n.includes("palm")) return "Google";
@@ -391,8 +404,9 @@ function getProvider(modelName) {
 }
 
 function renderProviderFilter() {
-  const providers = ["全部", "OpenAI", "Anthropic", "Google", "Meta", "通义千问", "智谱", "DeepSeek", "其他"];
   const wrap = document.getElementById("providerFilter");
+  if(!wrap) return;
+  const providers = ["全部", "OpenAI", "Anthropic", "Google", "Meta", "通义千问", "智谱", "DeepSeek", "其他"];
   wrap.innerHTML = providers.map(p => `<span class="chip ${state.providerFilter.includes(p) || (p==="全部" && state.providerFilter.length===0) ? "active" : ""}" data-p="${p}">${p}</span>`).join("");
   wrap.querySelectorAll(".chip").forEach(c => {
     c.onclick = () => {
@@ -408,8 +422,9 @@ function renderProviderFilter() {
 }
 
 function renderPriceTypeFilter() {
-  const types = ["全部", "按次", "按量"];
   const wrap = document.getElementById("priceTypeFilter");
+  if(!wrap) return;
+  const types = ["全部", "按次", "按量"];
   wrap.innerHTML = types.map(t => `<span class="chip ${state.priceTypeFilter.includes(t) || (t==="全部" && state.priceTypeFilter.length===0) ? "active" : ""}" data-t="${t}">${t}</span>`).join("");
   wrap.querySelectorAll(".chip").forEach(c => {
     c.onclick = () => {
@@ -425,9 +440,9 @@ function renderPriceTypeFilter() {
 }
 
 function renderSiteFilter() {
-  const siteNames = [...new Set(state.modelPrices.map(m => m.siteName))];
   const wrap = document.getElementById("siteFilter");
-  
+  if(!wrap) return;
+  const siteNames = [...new Set(state.modelPrices.map(m => m.siteName))];
   if (siteNames.length === 0) {
     wrap.innerHTML = `<div style="font-size:12px;color:#999;">暂无站点数据</div>`;
     return;
@@ -463,7 +478,7 @@ function renderModelList() {
   
   if (state.modelSearch.trim()) {
     const q = state.modelSearch.trim().toLowerCase();
-    list = list.filter(m => m.modelName.toLowerCase().includes(q) || m.siteName.toLowerCase().includes(q));
+    list = list.filter(m => (m.modelName||"").toLowerCase().includes(q) || (m.siteName||"").toLowerCase().includes(q));
   }
   
   if (state.providerFilter.length) {
@@ -478,7 +493,7 @@ function renderModelList() {
     list = list.filter(m => state.priceTypeFilter.includes(m.priceType));
   }
 
-  list.sort((a, b) => a.cnyPrice - b.cnyPrice);
+  list.sort((a, b) => (a.cnyPrice || 0) - (b.cnyPrice || 0));
 
   if (!list.length) {
     wrap.innerHTML = `<div class="empty">暂无数据<br>点击右上角「更新价格」拉取，或更改筛选条件。</div>`;
@@ -486,26 +501,25 @@ function renderModelList() {
   }
   
   wrap.innerHTML = list.map(m => {
-    // 根据接口数据组装展示内容
     let html = `<div class="model-card" onclick="openModelDrawer('${m.siteId}')">
       <div class="model-info">
         <div class="model-name">${esc(m.modelName)}</div>
         <div class="model-meta">${esc(m.siteName)}</div>`;
         
     if (m.priceType === "按量") {
-      html += `<div class="model-raw">接口原始: 输入 ${m.rawInput} / 输出 ${m.rawOutput}</div>`;
+      html += `<div class="model-raw">接口原始: 输入 ${m.rawInput !== undefined ? m.rawInput : (m.rawPrice || '-')} / 输出 ${m.rawOutput !== undefined ? m.rawOutput : '-'}</div>`;
     } else {
-      html += `<div class="model-raw">接口原始价格: ${m.rawInput}</div>`;
+      html += `<div class="model-raw">接口原始价格: ${m.rawInput !== undefined ? m.rawInput : (m.rawPrice || '-')}</div>`;
     }
     
     html += `</div>
       <div class="model-price">`;
       
     if (m.priceType === "按量") {
-      html += `输入: ￥${m.cnyInput.toFixed(4)} / 1M<br>
-              输出: ￥${m.cnyOutput.toFixed(4)} / 1M`;
+      html += `输入: ￥${(m.cnyInput || m.cnyPrice || 0).toFixed(4)} / 1M<br>
+              输出: ￥${(m.cnyOutput || 0).toFixed(4)} / 1M`;
     } else {
-      html += `￥${m.cnyInput.toFixed(4)}<span>/ 次</span>`;
+      html += `￥${(m.cnyInput || m.cnyPrice || 0).toFixed(4)}<span>/ 次</span>`;
     }
     
     html += `</div></div>`;
@@ -556,19 +570,15 @@ document.getElementById("btnFetchPrices").onclick = async () => {
             const modelName = item.model_name || item.model || item.id;
             if(!modelName) return;
 
-            // 提取数据
             const mRatio = item.model_ratio || item.ratio;
             const cRatio = item.completion_ratio || mRatio;
             const mPrice = item.model_price || item.price;
             
-            // 用户填入的汇率（默认0.002）
             const rate = s.modelRatio || 0.002;
 
             if (mRatio !== undefined) {
-              // 按量计费
               const rawIn = parseFloat(mRatio) || 0;
               const rawOut = parseFloat(cRatio) || 0;
-              // 接口通常给的是基于1000 tokens的价格，乘以1000转为1M tokens价格展示
               newPrices.push({
                 siteId: s.id, siteName: s.name, modelName: modelName,
                 priceType: "按量",
@@ -576,10 +586,9 @@ document.getElementById("btnFetchPrices").onclick = async () => {
                 rawOutput: rawOut,
                 cnyInput: rawIn * rate * 1000,
                 cnyOutput: rawOut * rate * 1000,
-                cnyPrice: rawIn * rate * 1000 // 用于排序的值
+                cnyPrice: rawIn * rate * 1000 
               });
             } else if (mPrice !== undefined) {
-              // 按次计费
               const rawPrice = parseFloat(mPrice) || 0;
               newPrices.push({
                 siteId: s.id, siteName: s.name, modelName: modelName,
