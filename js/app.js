@@ -587,7 +587,7 @@ document.getElementById("btnFetchPrices").onclick = async () => {
                 cnyPrice: cnyInput 
               });
             } else if (!isNaN(mPrice)) {
-              // 按次计算（修复：补上乘以汇率 rate）
+              // 按次计算
               const cnyPrice = mPrice * rate;
               newPrices.push({
                 siteId: s.id, siteName: s.name, modelName: modelName,
@@ -636,9 +636,21 @@ function renderRegistry() {
   const html = []; groups.forEach(g => { const items = list.filter(s => s.group === g); if (!items.length) return; const collapsed = state.regCollapsed.includes(g); html.push(`<section class="group ${collapsed ? "collapsed" : ""}" data-group="${esc(g)}"><div class="group-head"><span class="arrow">▼</span><span class="gname">${esc(g)}</span><span class="gcount">${items.length}</span></div><div class="group-body">${items.map(regCardHTML).join("")}</div></section>`); });
   wrap.innerHTML = html.join("");
   wrap.querySelectorAll(".group-head").forEach(h => { h.onclick = () => { const sec = h.parentElement; const g = sec.dataset.group; sec.classList.toggle("collapsed"); const set = new Set(state.regCollapsed); if (sec.classList.contains("collapsed")) set.add(g); else set.delete(g); state.regCollapsed = [...set]; }; });
+  
+  // 给整个卡片加上点击跳转
+  wrap.querySelectorAll(".reg-card").forEach(card => {
+    card.onclick = (e) => {
+      // 如果点的是按钮，就不触发跳转
+      if (e.target.closest("button")) return;
+      const id = card.dataset.id;
+      const r = REGISTRY.sites.find(s => s.id === id);
+      if (r && r.invite) window.open(r.invite, "_blank");
+    };
+  });
+  
   wrap.querySelectorAll("[data-add]").forEach(btn => { btn.onclick = () => addFromRegistry(btn.dataset.add); });
 }
-function regCardHTML(s) { const added = state.sites.some(x => x.sourceId === s.id); const tags = (s.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join(""); return `<div class="reg-card"><div class="reg-top"><div class="reg-name">${(s.tags||[]).includes("常用") ? '<span style="color:var(--accent);margin-right:4px;font-size:15px">☆</span>' : ''}${esc(s.name)}</div><button class="mini-btn ${added ? "done" : ""}" data-add="${esc(s.id)}" ${added ? "disabled" : ""}>${added ? "已添加" : "添加"}</button></div><div class="card-tags">${tags}</div><div class="reg-note">${esc(s.group)}｜${linkify(s.note || "")}</div></div>`; }
+function regCardHTML(s) { const added = state.sites.some(x => x.sourceId === s.id); const tags = (s.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join(""); return `<div class="reg-card" data-id="${esc(s.id)}" style="cursor:pointer"><div class="reg-top"><div class="reg-name">${(s.tags||[]).includes("常用") ? '<span style="color:var(--accent);margin-right:4px;font-size:15px">☆</span>' : ''}${esc(s.name)}</div><button class="mini-btn ${added ? "done" : ""}" data-add="${esc(s.id)}" ${added ? "disabled" : ""}>${added ? "已添加" : "添加"}</button></div><div class="card-tags">${tags}</div><div class="reg-note">${esc(s.group)}｜${linkify(s.note || "")}</div></div>`; }
 function addFromRegistry(rid) { const r = REGISTRY.sites.find(s => s.id === rid); if (!r) return; if (state.sites.some(x => x.sourceId === r.id)) { toast("已经添加过了"); return; } let host = ""; try { host = new URL(r.invite).origin; } catch {} const obj = { id: uid(), name: r.name, invite: r.invite, group: r.group, tags: [...(r.tags || [])], note: r.note || "", hasCheckin: ["有签到", "限制签到"].includes(r.group), todayCheckedIn: false, lastCheckinDate: "", balance: "", quotaPerUnit: "500000", currency: "CNY", apiEndpoint: host ? host : "", siteType: "newapi", modelRatio: "1", accessToken: "", userId: "", sourceId: r.id, createdAt: new Date().toISOString(), lastOpenedAt: "" }; state.sites.push(obj); store.saveSites(state.sites); renderList(); renderRegistry(); toast(`已添加「${r.name}」`); }
 
 function openSettings() {
