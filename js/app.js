@@ -2,6 +2,7 @@
 const KEY_SITES = "axc_sites_v1";
 const KEY_SETTINGS = "axc_settings_v1";
 const KEY_PRICES = "axc_prices_v1";
+const KEY_READ_NOTICES = "axc_read_notices_v1";
 let REGISTRY = { notice: [], contact: {}, presetGroups: [], presetTags: [], sites: [] };
 
 function defaultSettings() {
@@ -32,7 +33,9 @@ const store = {
   },
   saveSettings(s) { localStorage.setItem(KEY_SETTINGS, JSON.stringify(s)); },
   getPrices() { try { return JSON.parse(localStorage.getItem(KEY_PRICES) || "[]"); } catch { return []; } },
-  savePrices(prices) { localStorage.setItem(KEY_PRICES, JSON.stringify(prices)); }
+  savePrices(prices) { localStorage.setItem(KEY_PRICES, JSON.stringify(prices)); },
+  getReadNotices() { try { return JSON.parse(localStorage.getItem(KEY_READ_NOTICES) || "[]"); } catch { return []; } },
+  saveReadNotices(ids) { localStorage.setItem(KEY_READ_NOTICES, JSON.stringify(ids)); }
 };
 
 const state = {
@@ -103,6 +106,26 @@ async function init() {
   }
   
   updateFilterUI(); updateRegFilterUI(); updateModelFilterUI(); bindEvents();
+  updateNoticeBadge(); // 初始化红点
+}
+
+function updateNoticeBadge() {
+  const readList = store.getReadNotices();
+  let unreadCount = 0;
+  (REGISTRY.notice || []).forEach(n => {
+    const id = n.date + "_" + n.title;
+    if (!readList.includes(id)) unreadCount++;
+  });
+  
+  const badge = document.getElementById("noticeBadge");
+  if (badge) {
+    if (unreadCount > 0) {
+      badge.textContent = unreadCount;
+      badge.style.display = "inline-block";
+    } else {
+      badge.style.display = "none";
+    }
+  }
 }
 
 function applyTheme() { document.documentElement.setAttribute("data-theme", state.settings.theme === "mono" ? "mono" : "morandi"); }
@@ -637,10 +660,8 @@ function renderRegistry() {
   wrap.innerHTML = html.join("");
   wrap.querySelectorAll(".group-head").forEach(h => { h.onclick = () => { const sec = h.parentElement; const g = sec.dataset.group; sec.classList.toggle("collapsed"); const set = new Set(state.regCollapsed); if (sec.classList.contains("collapsed")) set.add(g); else set.delete(g); state.regCollapsed = [...set]; }; });
   
-  // 给整个卡片加上点击跳转
   wrap.querySelectorAll(".reg-card").forEach(card => {
     card.onclick = (e) => {
-      // 如果点的是按钮，就不触发跳转
       if (e.target.closest("button")) return;
       const id = card.dataset.id;
       const r = REGISTRY.sites.find(s => s.id === id);
@@ -789,7 +810,9 @@ function toast(msg) { const el = document.getElementById("toast"); el.textConten
 function bindEvents() {
   document.querySelectorAll(".nav-item").forEach(n => n.onclick = () => switchTab(n.dataset.tab));
   document.getElementById("btnNotice").onclick = () => {
+    const readList = store.getReadNotices(); // 获取打开前的已读列表
     let html = `<h3>公告</h3><div class="notice-contact"><b>联系作者</b><br>邮箱：${esc(REGISTRY.contact?.email || "")}<br>QQ：${esc(REGISTRY.contact?.qq || "")}</div>`;
+    
     let notices = (REGISTRY.notice || []).slice();
     notices.sort((a, b) => {
       const pinA = a.isPinned ? 1 : 0;
@@ -797,13 +820,51 @@ function bindEvents() {
       if (pinA !== pinB) return pinB - pinA;
       return (b.date || "").localeCompare(a.date || "");
     });
+
+    const newReadList = [...readList];
+
     if (notices.length === 0) html += `<div class="empty" style="padding:20px;">暂无公告</div>`;
     else notices.forEach(n => { 
-      const pinHtml = n.isPinned ? '<span style="background:var(--danger);color:#fff;font-size:10px;padding:2px 4px;border-radius:4px;margin-right:6px;">置顶</span>' : '';
-      html += `<div class="notice-card"><div class="notice-header"><span class="notice-title">${pinHtml}${esc(n.title)}</span><span class="notice-date">${esc(n.date)}</span></div><div class="notice-content">${linkify(n.content)}</div></div>`; 
+      const pinHtml = n.isPinned ? '<span style="background:var(--danger);color:#fff;font-size:10px;padding:2px 4px;border-radius:4px;">置顶</span>' : '';
+      const noticeId = n.date + "_" + n.title;
+      const isRead = readList.includes(noticeId);
+      
+      if (!isRead) newReadList.push(noticeId); // 如果未读，准备加入已读列表
+      
+      const expandedClass = isRead ? "" : "expanded"; // 未读默认展开
+      
+      html += `
+        <div class="notice-card ${expandedClass}" data-id="${esc(noticeId)}">
+          <div class="notice-header">
+            <div class="left-part">
+              ${pinHtml}
+              <span class="notice-title">${esc(n.title)}</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span class="notice-date">${esc(n.date)}</span>
+              <span class="notice-arrow">▼</span>
+            </div>
+          </div>
+          <div class="notice-content">${linkify(n.content)}</div>
+        </div>
+      `; 
     });
+    
     html += `<div class="btn-row"><button class="btn" id="btnCloseNotice">关闭</button></div>`;
-    showModal(html); document.getElementById("btnCloseNotice").onclick = closeModal;
+    showModal(html); 
+    
+    // 绑定折叠事件
+    document.querySelectorAll(".notice-header").forEach(header => {
+      header.onclick = () => {
+        header.parentElement.classList.toggle("expanded");
+      };
+    });
+
+    // 标记为已读，清除红点
+    store.saveReadNotices(newReadList);
+    document.getElementById("noticeBadge").style.display = "none";
+
+    document.getElementById("btnCloseNotice").onclick = closeModal;
   };
   document.getElementById("btnSearch").onclick = () => { const bar = document.getElementById("searchBar"); bar.classList.toggle("show"); if (bar.classList.contains("show")) document.getElementById("searchInput").focus(); };
   document.getElementById("btnCloseSearch").onclick = () => { document.getElementById("searchBar").classList.remove("show"); document.getElementById("searchInput").value = ""; state.search = ""; renderList(); renderRegistry(); };
