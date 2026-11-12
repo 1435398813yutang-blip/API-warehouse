@@ -316,7 +316,7 @@ async function fetchBalance(id) {
     }
   } catch (err) {
     console.error(err);
-    toast("拉取失败，请检查代理配置或去站点手动查看");
+    toast("拉取失败！请先检查是否开启了网络代理，或检查你的 Worker 代理是否正常。也可以直接去站点手动查看并填写余额。");
   }
 }
 
@@ -696,6 +696,10 @@ function showTutorial() {
     </div>
     
     <div id="tut1" style="font-size:13px; line-height:1.6; color:var(--text-2);">
+      <div style="color:#b57b7b; background:#fdf5f5; padding:8px; border-radius:6px; margin-bottom:12px; font-size:12px;">
+        ⚠️ 注意：本工具的自动拉取余额和拉取模型功能依赖 Cloudflare 代理。由于网络环境限制，点击刷新拉取时，请务必确保开启了网络代理。如果未开启导致拉取失败，请直接在上方编辑框中手动填写余额。
+      </div>
+      
       <b>一、余额换算：用于首页显示真实余额</b><br>
       中转站接口返回的余额数据通常是底层的“Quota（配额）”，数值极大。需要通过除法将其转换为真实的金额。<br>
       1. <b>默认情况</b>：大多数标准站点的换算比例默认为 500000（即 1 额度 = 500000 quota）。<br>
@@ -711,6 +715,10 @@ function showTutorial() {
     </div>
 
     <div id="tut2" style="display:none; font-size:13px; line-height:1.6; color:var(--text-2);">
+      <div style="color:#b57b7b; background:#fdf5f5; padding:8px; border-radius:6px; margin-bottom:12px; font-size:12px;">
+        ⚠️ 注意：注册和配置 Cloudflare Worker 的过程中，请确保你的网络代理处于开启状态，否则可能无法正常访问其控制台或无法部署成功。
+      </div>
+      
       <p>由于浏览器的跨域安全限制，前端网页无法直接拉取其他站点的余额。你需要免费配置一个 Cloudflare Worker 作为中转代理。</p>
       
       <b>【第一步：注册并创建 Worker】</b><br>
