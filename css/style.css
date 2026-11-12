@@ -31,6 +31,23 @@ a{color:var(--accent);text-decoration:underline;word-break:break-all}
 .text-btn{background:none;border:none;font-size:14px;color:var(--text-2);cursor:pointer;padding:6px 10px;line-height:1;transition:color .15s;border-radius:var(--radius)}
 .text-btn:hover,.text-btn:active{color:var(--text);background:rgba(0,0,0,.04)}
 
+/* === 公告角标 === */
+.badge {
+  position: absolute;
+  top: 2px;
+  right: 0px;
+  background: #e74c3c;
+  color: #fff;
+  font-size: 10px;
+  font-weight: bold;
+  padding: 1px 4px;
+  border-radius: 10px;
+  min-width: 16px;
+  text-align: center;
+  line-height: 1.2;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
 /* 底部导航 */
 .bottom-nav{position:fixed;bottom:0;left:0;right:0;z-index:40;display:flex;
   background:rgba(var(--card-rgb),0.95);backdrop-filter:blur(10px);
@@ -167,10 +184,17 @@ main{padding:4px 16px 20px;position:relative;z-index:10}
   color:var(--bg);padding:8px 16px;border-radius:var(--radius);font-size:13px;z-index:100;
   opacity:0;transition:.2s;pointer-events:none}
 .toast.show{opacity:1}
+
 .notice-contact{background:#fbfaf8;border:1.5px solid var(--border);border-radius:var(--radius);padding:12px;margin-bottom:16px;font-size:13px;color:var(--text-2);line-height:1.6;}
 .notice-contact b{color:var(--text);}
 .notice-card{background:#fff;border:1.5px solid var(--border);border-radius:var(--radius);padding:12px;margin-bottom:12px;}
-.notice-header{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;border-bottom:1px dashed #eee;padding-bottom:6px;}
+
+/* 公告折叠面板的样式 */
+.notice-header{display:flex;justify-content:space-between;align-items:baseline;padding-bottom:6px;cursor:pointer;user-select:none;}
+.notice-header .left-part{display:flex;align-items:center;gap:6px;flex:1;}
+.notice-arrow{font-size:10px;color:var(--text-2);transition:transform .2s;}
+.notice-card.expanded .notice-arrow{transform:rotate(180deg);}
 .notice-title{font-weight:600;font-size:14px;color:var(--text);}
 .notice-date{font-size:12px;color:var(--text-2);}
-.notice-content{font-size:13px;color:var(--text);line-height:1.6;white-space:pre-wrap;word-break:break-word;}
+.notice-content{font-size:13px;color:var(--text);line-height:1.6;white-space:pre-wrap;word-break:break-word;display:none;margin-top:8px;border-top:1px dashed #eee;padding-top:8px;}
+.notice-card.expanded .notice-content{display:block;}
