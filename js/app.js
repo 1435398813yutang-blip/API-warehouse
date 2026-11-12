@@ -84,13 +84,11 @@ function linkify(text) {
 }
 
 async function init() {
-  // 拉取外置 JSON 数据
   try {
     const res = await fetch('./registry.json');
     if (res.ok) {
       REGISTRY = await res.json();
       const s = store.getSettings();
-      // 如果用户第一次打开，用 registry 里的预设初始化
       if (!localStorage.getItem(KEY_SETTINGS)) {
         if (REGISTRY.presetGroups && REGISTRY.presetGroups.length) s.groups = [...REGISTRY.presetGroups];
         if (REGISTRY.presetTags && REGISTRY.presetTags.length) s.tags = [...REGISTRY.presetTags];
@@ -766,16 +764,39 @@ function toast(msg) {
 }
 
 function bindEvents() {
+  // ==== 这里是改过的公告展示逻辑 ====
   document.getElementById("btnNotice").onclick = () => {
-    const noticeLines = (REGISTRY.notice || []).map(n => `【${esc(n.date)}】${esc(n.title)}：${linkify(n.content)}`);
-    noticeLines.push(`联系作者：${esc(REGISTRY.contact.email || "")}（QQ ${esc(REGISTRY.contact.qq || "")}）`);
-    showModal(`
-      <h3>公告</h3>
-      <div class="notice-box" style="max-height:60vh;overflow-y:auto">${noticeLines.join("<br><br>")}</div>
-      <div class="btn-row"><button class="btn" id="btnCloseNotice">关闭</button></div>
-    `);
+    let html = `<h3>公告</h3>`;
+    
+    // 置顶联系方式卡片
+    html += `<div class="notice-contact">
+      <b>联系作者</b><br>
+      邮箱：${esc(REGISTRY.contact?.email || "")}<br>
+      QQ：${esc(REGISTRY.contact?.qq || "")}
+    </div>`;
+
+    // 倒序显示公告列表（最新的在上面）
+    const notices = (REGISTRY.notice || []).slice().reverse();
+    if (notices.length === 0) {
+      html += `<div class="empty" style="padding:20px;">暂无公告</div>`;
+    } else {
+      notices.forEach(n => {
+        html += `<div class="notice-card">
+          <div class="notice-header">
+            <span class="notice-title">${esc(n.title)}</span>
+            <span class="notice-date">${esc(n.date)}</span>
+          </div>
+          <div class="notice-content">${linkify(n.content)}</div>
+        </div>`;
+      });
+    }
+
+    html += `<div class="btn-row"><button class="btn" id="btnCloseNotice">关闭</button></div>`;
+    
+    showModal(html);
     document.getElementById("btnCloseNotice").onclick = closeModal;
   };
+
   document.getElementById("btnSearch").onclick = () => {
     const bar = document.getElementById("searchBar");
     bar.classList.toggle("show");
