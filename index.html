@@ -11,85 +11,93 @@
 <body>
 <div id="wallpaper"></div>
 
-<header class="topbar">
-  <h1 id="appName">API小仓库</h1>
-  <button class="text-btn" id="btnNotice">公告</button>
-  <button class="text-btn" id="btnSearch">搜索</button>
-  <button class="text-btn" id="btnSettings">设置</button>
-</header>
+<!-- ===== 仓库页 ===== -->
+<div class="page active" id="page-warehouse">
+  <header class="topbar">
+    <h1 id="appName">API小仓库</h1>
+    <button class="text-btn" id="btnNotice">公告</button>
+    <button class="text-btn" id="btnSearch">搜索</button>
+    <button class="text-btn" id="btnSettings">设置</button>
+  </header>
 
-<div class="search-bar" id="searchBar">
-  <input id="searchInput" type="search" placeholder="搜索所有站点、标签、备注…">
-  <button class="text-btn" id="btnCloseSearch">关闭</button>
-</div>
-
-<div class="entry-row">
-  <button class="entry-btn" id="btnRegistry">收录站点（点击展开）</button>
-</div>
-
-<section class="registry-panel" id="registryPanel" hidden>
-  <div class="reg-head">
-    <h2>收录站点</h2>
-    <button class="text-btn" id="regClose">关闭</button>
+  <div class="search-bar" id="searchBar">
+    <input id="searchInput" type="search" placeholder="搜索所有站点、标签、备注…">
+    <button class="text-btn" id="btnCloseSearch">关闭</button>
   </div>
-  
+
+  <div class="entry-row">
+    <button class="entry-btn" id="btnRegistry">收录站点（点击展开）</button>
+  </div>
+
+  <section class="registry-panel" id="registryPanel" hidden>
+    <div class="reg-head">
+      <h2>收录站点</h2>
+      <button class="text-btn" id="regClose">关闭</button>
+    </div>
+    <div class="filter-wrap">
+      <div class="filter-head" id="regFilterToggle">
+        <span id="regFilterTitle">筛选（点击展开）</span>
+        <span class="arrow" id="regFilterArrow">▼</span>
+      </div>
+      <div class="filter-content" id="regFilterContent" style="display:none">
+        <div class="filter-block"><span class="filter-label">分组</span><div class="chip-row" id="regGroupFilter"></div></div>
+        <div class="filter-block"><span class="filter-label">标签（可多选）</span><div class="chip-row" id="regTagFilter"></div></div>
+      </div>
+    </div>
+    <div class="reg-body" id="regList"></div>
+  </section>
+
+  <div class="section-divider"><span>我的站点</span></div>
+
   <div class="filter-wrap">
-    <div class="filter-head" id="regFilterToggle">
-      <span id="regFilterTitle">筛选（点击展开）</span>
-      <span class="arrow" id="regFilterArrow">▼</span>
+    <div class="filter-head" id="filterToggle">
+      <span id="filterTitle">筛选与排序（点击展开）</span>
+      <span class="arrow" id="filterArrow">▼</span>
     </div>
-    <div class="filter-content" id="regFilterContent" style="display:none">
-      <div class="filter-block">
-        <span class="filter-label">分组</span>
-        <div class="chip-row" id="regGroupFilter"></div>
+    <div class="filter-content" id="filterContent" style="display:none">
+      <div class="filter-block"><span class="filter-label">分组</span><div class="chip-row" id="groupFilter"></div></div>
+      <div class="filter-block"><span class="filter-label">标签（可多选）</span><div class="chip-row" id="tagFilter"></div></div>
+      <div class="sort-row">
+        <span>排序</span>
+        <select id="sortSelect">
+          <option value="custom">默认（常用优先）</option>
+          <option value="name-asc">名称 A→Z</option>
+          <option value="name-desc">名称 Z→A</option>
+          <option value="balance-desc">余额高→低</option>
+          <option value="balance-asc">余额低→高</option>
+          <option value="recent">最近打开</option>
+        </select>
       </div>
-      <div class="filter-block">
-        <span class="filter-label">标签（可多选）</span>
-        <div class="chip-row" id="regTagFilter"></div>
-      </div>
     </div>
   </div>
 
-  <div class="reg-body" id="regList"></div>
-</section>
-
-<div class="section-divider"><span>我的站点</span></div>
-
-<div class="filter-wrap">
-  <div class="filter-head" id="filterToggle">
-    <span id="filterTitle">筛选与排序（点击展开）</span>
-    <span class="arrow" id="filterArrow">▼</span>
-  </div>
-  <div class="filter-content" id="filterContent" style="display:none">
-    <div class="filter-block">
-      <span class="filter-label">分组</span>
-      <div class="chip-row" id="groupFilter"></div>
-    </div>
-    <div class="filter-block">
-      <span class="filter-label">标签（可多选）</span>
-      <div class="chip-row" id="tagFilter"></div>
-    </div>
-    <div class="sort-row">
-      <span>排序</span>
-      <select id="sortSelect">
-        <option value="custom">默认（常用优先）</option>
-        <option value="name-asc">名称 A→Z</option>
-        <option value="name-desc">名称 Z→A</option>
-        <option value="balance-desc">余额高→低</option>
-        <option value="balance-asc">余额低→高</option>
-        <option value="recent">最近打开</option>
-      </select>
-    </div>
-  </div>
+  <main id="siteList"></main>
+  <button class="fab" id="btnAdd" title="添加站点">+</button>
 </div>
 
-<main id="siteList"></main>
-<button class="fab" id="btnAdd" title="添加站点">+</button>
+<!-- ===== 模型页 ===== -->
+<div class="page" id="page-models">
+  <div class="model-header">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+      <h2 style="margin:0; font-family:Georgia,serif; font-size:17px;">模型比价</h2>
+      <button class="text-btn" style="color:var(--accent)" id="btnFetchPrices">↻ 更新价格</button>
+    </div>
+    <div class="search-bar show" style="padding:0; border:none; background:transparent;">
+      <input id="modelSearchInput" type="search" placeholder="输入模型名，如 gpt-4o…">
+    </div>
+  </div>
+  <div class="model-list" id="modelList"></div>
+</div>
+
+<!-- ===== 底部导航 ===== -->
+<nav class="bottom-nav">
+  <div class="nav-item active" data-tab="warehouse">仓库</div>
+  <div class="nav-item" data-tab="models">模型</div>
+</nav>
 
 <div class="modal-mask" id="modalMask">
   <div class="modal" id="modalBox"></div>
 </div>
-
 <div class="toast" id="toast"></div>
 
 <script src="js/app.js"></script>
