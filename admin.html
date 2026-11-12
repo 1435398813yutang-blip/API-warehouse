@@ -72,6 +72,7 @@
     .chip.active{background:var(--accent);color:#fff;border-color:var(--accent)}
 
     .notice-card{background:#fff;border:1.5px solid var(--border);border-radius:var(--radius);padding:12px;margin-bottom:8px;box-shadow:var(--shadow)}
+    .pin-badge{background:var(--danger); color:#fff; font-size:10px; padding:2px 5px; border-radius:4px; margin-right:6px;}
   </style>
 </head>
 <body>
@@ -142,7 +143,7 @@ function renderNotices() {
     const trueIdx = notices.length - 1 - i;
     return `<div class="notice-card">
       <div style="display:flex;justify-content:space-between;margin-bottom:8px;border-bottom:1px dashed #eee;padding-bottom:6px;">
-        <b style="font-size:14px;">${n.title}</b>
+        <b style="font-size:14px;">${n.isPinned ? '<span class="pin-badge">置顶</span>' : ''}${n.title}</b>
         <span style="font-size:12px;color:var(--text-2)">${n.date}</span>
       </div>
       <div style="font-size:13px;color:var(--text-2);white-space:pre-wrap;word-break:break-word;">${n.content}</div>
@@ -284,7 +285,7 @@ window.saveSiteForm = () => {
 
 function openNoticeForm(notice, idx) {
   const isEdit = idx !== undefined;
-  const n = notice || { date: new Date().toISOString().split('T')[0], title: "", content: "" };
+  const n = notice || { date: new Date().toISOString().split('T')[0], title: "", content: "", isPinned: false };
 
   document.getElementById("modalBox").innerHTML = `
     <h3>${isEdit ? '编辑公告' : '发布新公告'}</h3>
@@ -292,6 +293,10 @@ function openNoticeForm(notice, idx) {
     <div class="field"><label>日期</label><input id="n-date" value="${n.date}"></div>
     <div class="field"><label>标题</label><input id="n-title" value="${n.title}"></div>
     <div class="field"><label>内容（支持换行）</label><textarea id="n-content" style="min-height:120px">${n.content}</textarea></div>
+    <div class="field" style="display:flex; align-items:center; gap:8px;">
+      <input type="checkbox" id="n-pinned" ${n.isPinned ? 'checked' : ''} style="width:16px; height:16px; margin:0;">
+      <label for="n-pinned" style="margin:0; cursor:pointer;">是否置顶此公告</label>
+    </div>
     <div class="btn-row" style="border:none;margin-top:20px;">
       <button class="btn" onclick="closeModal()">取消</button>
       <button class="btn primary" onclick="saveNoticeForm()">保存</button>
@@ -305,13 +310,14 @@ window.saveNoticeForm = () => {
   const date = document.getElementById("n-date").value.trim();
   const title = document.getElementById("n-title").value.trim();
   const content = document.getElementById("n-content").value.trim();
+  const isPinned = document.getElementById("n-pinned").checked;
   if(!title || !content) return alert("标题和内容必填");
 
-  const obj = { date, title, content };
+  const obj = { date, title, content, isPinned };
   if(idxStr !== '') {
     registry.notice[Number(idxStr)] = obj;
   } else {
-    registry.notice.push(obj); // 新公告放在最后面，显示时会倒序在最前面
+    registry.notice.push(obj); 
   }
   closeModal();
   renderNotices();
