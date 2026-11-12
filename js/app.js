@@ -130,9 +130,13 @@ function applyWallpaper() {
   const w = state.settings.wallpaper || { type: "none", value: "", opacity: 0.82 };
   const el = document.getElementById("wallpaper");
   let css = "transparent";
-  if (w.type === "color" && w.value) css = w.value;
-  else if (w.type === "gradient" && w.value) css = w.value;
-  else if (w.type === "image" && w.value) css = `url("${w.value}") center/cover no-repeat`;
+  
+  if (w.type === "color" && w.value) {
+    css = w.value;
+  } else if (w.type === "image" && w.value) {
+    css = `url("${w.value}") center/cover no-repeat`;
+  }
+  
   el.style.background = css;
   document.documentElement.style.setProperty("--card-opacity", String(w.opacity || 0.82));
   const name = state.settings.appName || "API小仓库";
@@ -606,8 +610,7 @@ function openSettings() {
         <select id="s-wallType">
           <option value="none" ${w.type === "none" ? "selected" : ""}>无</option>
           <option value="color" ${w.type === "color" ? "selected" : ""}>纯色</option>
-          <option value="gradient" ${w.type === "gradient" ? "selected" : ""}>渐变</option>
-          <option value="image" ${w.type === "image" ? "selected" : ""}>图片 URL</option>
+          <option value="image" ${w.type === "image" ? "selected" : ""}>图片 URL / 本地上传</option>
         </select>
       </div>
       <div class="field" id="colorField" style="display:${w.type === "color" ? "block" : "none"}">
@@ -619,10 +622,16 @@ function openSettings() {
           </div>
         </div>
       </div>
-      <div class="field" id="valueField" style="display:${w.type === "color" || w.type === "none" ? "none" : "block"}">
-        <label>${w.type === "gradient" ? "渐变 CSS" : w.type === "image" ? "图片链接" : "值"}</label>
-        <input id="s-wallValue" value="${esc(w.value)}" placeholder="如 linear-gradient(...) 或 https://...">
+      
+      <div class="field" id="valueField" style="display:${w.type === "image" ? "block" : "none"}">
+        <label>图片链接（或者是点下方按钮上传）</label>
+        <input id="s-wallValue" value="${esc(w.value && !w.value.startsWith('data:') ? w.value : '')}" placeholder="https://...">
+        <div style="margin-top:8px">
+          <input type="file" id="s-wallFile" accept="image/*" style="display:none">
+          <button class="btn" style="width:100%;padding:8px;font-size:13px" onclick="document.getElementById('s-wallFile').click()">从相册选择图片上传</button>
+        </div>
       </div>
+      
       <div class="wall-preview" id="wallPreview"></div>
       <div class="field"><label>卡片不透明度：<span id="opVal">${Math.round((w.opacity || 0.82) * 100)}%</span></label>
         <input type="range" id="s-opacity" min="40" max="100" value="${Math.round((w.opacity || 0.82) * 100)}" style="width:100%">
@@ -656,29 +665,38 @@ function openSettings() {
     store.saveSettings(s);
     applyWallpaper();
   };
+  
   const preview = () => {
     const type = document.getElementById("s-wallType").value;
     const opacity = parseInt(document.getElementById("s-opacity").value, 10) / 100;
     let value = "";
-    if (type === "color") value = document.getElementById("s-wallColor").value;
-    else if (type === "gradient" || type === "image") value = document.getElementById("s-wallValue").value.trim();
+    if (type === "color") {
+      value = document.getElementById("s-wallColor").value;
+    } else if (type === "image") {
+      value = document.getElementById("s-wallValue").value.trim();
+      if (!value && s.wallpaper.type === "image" && s.wallpaper.value.startsWith('data:')) {
+        value = s.wallpaper.value;
+      }
+    }
     s.wallpaper = { type, value, opacity };
     store.saveSettings(s);
     applyWallpaper();
+    
     const pv = document.getElementById("wallPreview");
     let css = "transparent";
     if (type === "color") css = value || "transparent";
-    else if (type === "gradient") css = value || "transparent";
     else if (type === "image") css = value ? `url("${value}") center/cover no-repeat` : "transparent";
     pv.style.background = css;
   };
+  
   const typeSel = document.getElementById("s-wallType");
   typeSel.onchange = () => {
     const t = typeSel.value;
     document.getElementById("colorField").style.display = t === "color" ? "block" : "none";
-    document.getElementById("valueField").style.display = (t === "gradient" || t === "image") ? "block" : "none";
+    document.getElementById("valueField").style.display = t === "image" ? "block" : "none";
     preview();
   };
+  
   const colorInput = document.getElementById("s-wallColor");
   colorInput.oninput = preview;
   colorInput.onchange = preview;
@@ -688,7 +706,56 @@ function openSettings() {
       preview();
     };
   });
+  
   document.getElementById("s-wallValue").oninput = preview;
+  
+  // 处理图片极限压缩上传
+  document.getElementById("s-wallFile").onchange = e => {
+    const file = e.target.files[0];
+    if(!file) return;
+    
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const img = new Image();
+      img.onload = () => {
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
+        const MAX_DIMENSION = 1280; // 强制缩小尺寸
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_DIMENSION) {
+            height *= MAX_DIMENSION / width;
+            width = MAX_DIMENSION;
+          }
+        } else {
+          if (height > MAX_DIMENSION) {
+            width *= MAX_DIMENSION / height;
+            height = MAX_DIMENSION;
+          }
+        }
+        canvas.width = width;
+        canvas.height = height;
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        // 极限压缩：保证 Base64 长度在安全范围内（小于 300KB），不会撑爆浏览器
+        let quality = 0.7;
+        let dataUrl = canvas.toDataURL("image/jpeg", quality);
+        
+        while (dataUrl.length > 400000 && quality > 0.3) {
+          quality -= 0.1;
+          dataUrl = canvas.toDataURL("image/jpeg", quality);
+        }
+        
+        document.getElementById("s-wallValue").value = dataUrl;
+        preview();
+      };
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  };
+
   document.getElementById("s-opacity").oninput = e => {
     document.getElementById("opVal").textContent = e.target.value + "%";
     preview();
@@ -764,18 +831,14 @@ function toast(msg) {
 }
 
 function bindEvents() {
-  // ==== 这里是改过的公告展示逻辑 ====
   document.getElementById("btnNotice").onclick = () => {
     let html = `<h3>公告</h3>`;
-    
-    // 置顶联系方式卡片
     html += `<div class="notice-contact">
       <b>联系作者</b><br>
       邮箱：${esc(REGISTRY.contact?.email || "")}<br>
       QQ：${esc(REGISTRY.contact?.qq || "")}
     </div>`;
 
-    // 倒序显示公告列表（最新的在上面）
     const notices = (REGISTRY.notice || []).slice().reverse();
     if (notices.length === 0) {
       html += `<div class="empty" style="padding:20px;">暂无公告</div>`;
