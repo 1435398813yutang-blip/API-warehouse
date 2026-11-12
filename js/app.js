@@ -46,7 +46,7 @@ const state = {
   modelSearch: "",
   providerFilter: [],
   priceTypeFilter: [],
-  siteFilter: [], // 新增：按站点筛选
+  siteFilter: [],
   regFilterGroup: "all",
   regFilterTags: [],
   regCollapsed: []
@@ -425,7 +425,6 @@ function renderPriceTypeFilter() {
 }
 
 function renderSiteFilter() {
-  // 获取所有有价格数据的来源站点
   const siteNames = [...new Set(state.modelPrices.map(m => m.siteName))];
   const wrap = document.getElementById("siteFilter");
   
@@ -486,15 +485,32 @@ function renderModelList() {
     return;
   }
   
-  wrap.innerHTML = list.map(m => `
-    <div class="model-card" onclick="openModelDrawer('${m.siteId}')">
+  wrap.innerHTML = list.map(m => {
+    // 根据接口数据组装展示内容
+    let html = `<div class="model-card" onclick="openModelDrawer('${m.siteId}')">
       <div class="model-info">
         <div class="model-name">${esc(m.modelName)}</div>
-        <div class="model-meta">${esc(m.siteName)} ${m.priceType === "按量" ? `(倍率: ${m.rawPrice})` : ""}</div>
-      </div>
-      <div class="model-price">￥${m.cnyPrice.toFixed(4)}<span>${m.unit}</span></div>
-    </div>
-  `).join("");
+        <div class="model-meta">${esc(m.siteName)}</div>`;
+        
+    if (m.priceType === "按量") {
+      html += `<div class="model-raw">接口原始: 输入 ${m.rawInput} / 输出 ${m.rawOutput}</div>`;
+    } else {
+      html += `<div class="model-raw">接口原始价格: ${m.rawInput}</div>`;
+    }
+    
+    html += `</div>
+      <div class="model-price">`;
+      
+    if (m.priceType === "按量") {
+      html += `输入: ￥${m.cnyInput.toFixed(4)} / 1M<br>
+              输出: ￥${m.cnyOutput.toFixed(4)} / 1M`;
+    } else {
+      html += `￥${m.cnyInput.toFixed(4)}<span>/ 次</span>`;
+    }
+    
+    html += `</div></div>`;
+    return html;
+  }).join("");
 }
 
 window.openModelDrawer = (siteId) => {
@@ -538,19 +554,42 @@ document.getElementById("btnFetchPrices").onclick = async () => {
         if (Array.isArray(items)) {
           items.forEach(item => {
             const modelName = item.model_name || item.model || item.id;
-            const rawRatio = item.model_ratio || item.ratio || item.input_price || item.price;
-            if (modelName && rawRatio !== undefined) {
-              const numRatio = parseFloat(rawRatio);
-              if (!isNaN(numRatio)) {
-                const ratio = s.modelRatio || 0.002;
-                const isByRequest = !item.model_ratio; // 没有model_ratio字段则认为是按次计费
-                newPrices.push({
-                  siteId: s.id, siteName: s.name, modelName: modelName,
-                  rawPrice: rawRatio, priceType: isByRequest ? "按次" : "按量",
-                  cnyPrice: numRatio * ratio, 
-                  unit: isByRequest ? "元 / 次" : "元 / 百万 Token"
-                });
-              }
+            if(!modelName) return;
+
+            // 提取数据
+            const mRatio = item.model_ratio || item.ratio;
+            const cRatio = item.completion_ratio || mRatio;
+            const mPrice = item.model_price || item.price;
+            
+            // 用户填入的汇率（默认0.002）
+            const rate = s.modelRatio || 0.002;
+
+            if (mRatio !== undefined) {
+              // 按量计费
+              const rawIn = parseFloat(mRatio) || 0;
+              const rawOut = parseFloat(cRatio) || 0;
+              // 接口通常给的是基于1000 tokens的价格，乘以1000转为1M tokens价格展示
+              newPrices.push({
+                siteId: s.id, siteName: s.name, modelName: modelName,
+                priceType: "按量",
+                rawInput: rawIn,
+                rawOutput: rawOut,
+                cnyInput: rawIn * rate * 1000,
+                cnyOutput: rawOut * rate * 1000,
+                cnyPrice: rawIn * rate * 1000 // 用于排序的值
+              });
+            } else if (mPrice !== undefined) {
+              // 按次计费
+              const rawPrice = parseFloat(mPrice) || 0;
+              newPrices.push({
+                siteId: s.id, siteName: s.name, modelName: modelName,
+                priceType: "按次",
+                rawInput: rawPrice,
+                rawOutput: 0,
+                cnyInput: rawPrice * rate,
+                cnyOutput: 0,
+                cnyPrice: rawPrice * rate
+              });
             }
           });
           successCount++;
@@ -655,7 +694,7 @@ function showTutorial() {
       1. <b>默认情况</b>：大多数标准站点的换算比例默认为 500000（即 1 额度 = 500000 quota）。<br>
       2. <b>自定义计算</b>：如果拉取的金额与实际不符，请使用以下公式自行计算：<br>
       <code>接口拉取的原始 Quota ÷ 网页显示的真实金额 = 换算比例</code><br>
-      *(例如：接口拉回 74737，网页实际余额为 1976.43 元，则 74737 ÷ 1976.43 ＝ 37.814。此时在“换算比例”填入 37.814 即可（也可以填整数或一位小数，只是数值越精确余额越精确。此比例仅用于让首页卡片显示正确的余额金额。)*<br><br>
+      *(例如：接口拉回 74737，网页实际余额为 1976.43 元，则 74737 ÷ 1976.43 ＝ 37.814。此时在“换算比例”填入 37.814 即可。此比例仅用于让首页卡片显示正确的余额金额。)*<br><br>
       
       <b>二、模型单价换算：用于模型比价</b><br>
       在“模型”页面中，接口拉取到的模型价格通常是“站点自定义额度”（如：12额度/次）或“倍率”（如：倍率 600）。需要通过乘法将其折算为人民币。<br>
@@ -723,8 +762,6 @@ function bindEvents() {
   document.querySelectorAll(".nav-item").forEach(n => n.onclick = () => switchTab(n.dataset.tab));
   document.getElementById("btnNotice").onclick = () => {
     let html = `<h3>公告</h3><div class="notice-contact"><b>联系作者</b><br>邮箱：${esc(REGISTRY.contact?.email || "")}<br>QQ：${esc(REGISTRY.contact?.qq || "")}</div>`;
-    
-    // 排序：置顶优先，然后按日期倒序
     let notices = (REGISTRY.notice || []).slice();
     notices.sort((a, b) => {
       const pinA = a.isPinned ? 1 : 0;
@@ -732,13 +769,11 @@ function bindEvents() {
       if (pinA !== pinB) return pinB - pinA;
       return (b.date || "").localeCompare(a.date || "");
     });
-    
     if (notices.length === 0) html += `<div class="empty" style="padding:20px;">暂无公告</div>`;
     else notices.forEach(n => { 
       const pinHtml = n.isPinned ? '<span style="background:var(--danger);color:#fff;font-size:10px;padding:2px 4px;border-radius:4px;margin-right:6px;">置顶</span>' : '';
       html += `<div class="notice-card"><div class="notice-header"><span class="notice-title">${pinHtml}${esc(n.title)}</span><span class="notice-date">${esc(n.date)}</span></div><div class="notice-content">${linkify(n.content)}</div></div>`; 
     });
-    
     html += `<div class="btn-row"><button class="btn" id="btnCloseNotice">关闭</button></div>`;
     showModal(html); document.getElementById("btnCloseNotice").onclick = closeModal;
   };
