@@ -25,6 +25,8 @@
 
     main{padding:16px 16px 90px}
     
+    .section-title{font-size:14px;font-weight:600;color:var(--text-2);margin:20px 0 10px 4px;}
+    
     .group{margin-bottom:16px}
     .group-head{display:flex;align-items:center;gap:8px;padding:8px 4px;cursor:pointer;user-select:none}
     .group-head .arrow{font-size:12px;color:var(--text-2);transition:.2s}
@@ -69,7 +71,7 @@
       background:#fff;font-size:13px;cursor:pointer;color:var(--text-2);user-select:none;transition:.1s}
     .chip.active{background:var(--accent);color:#fff;border-color:var(--accent)}
 
-    .notice-box{background:#faf9f7;border:1.5px solid var(--border);border-radius:var(--radius);padding:12px;font-size:13px;margin-bottom:16px}
+    .notice-card{background:#fff;border:1.5px solid var(--border);border-radius:var(--radius);padding:12px;margin-bottom:8px;box-shadow:var(--shadow)}
   </style>
 </head>
 <body>
@@ -77,12 +79,21 @@
 <header class="topbar">
   <h1>管理后台</h1>
   <div>
-    <button class="text-btn" id="btnSettings">全局设置</button>
+    <button class="text-btn" id="btnSettings">联系方式</button>
     <button class="text-btn" style="color:var(--accent)" id="btnAddSite">+ 新增站点</button>
   </div>
 </header>
 
-<main id="siteList"></main>
+<main>
+  <div class="section-title" style="display:flex;justify-content:space-between;align-items:center">
+    <span>公告列表</span>
+    <button class="text-btn" style="color:var(--accent);font-size:13px;padding:0" id="btnAddNotice">+ 新增公告</button>
+  </div>
+  <div id="noticeList"></div>
+
+  <div class="section-title">收录站点列表</div>
+  <div id="siteList"></div>
+</main>
 
 <button class="fab" id="btnExport">导出 JSON</button>
 
@@ -114,16 +125,44 @@ async function loadData() {
 }
 
 function render() {
+  renderNotices();
+  renderSites();
+}
+
+function renderNotices() {
+  const wrap = document.getElementById("noticeList");
+  const notices = registry.notice || [];
+  if(notices.length === 0) {
+    wrap.innerHTML = `<div style="font-size:12px;color:#999;padding:10px 4px;">暂无公告</div>`;
+    return;
+  }
+  // 倒序显示
+  const reversed = notices.slice().reverse();
+  wrap.innerHTML = reversed.map((n, i) => {
+    const trueIdx = notices.length - 1 - i;
+    return `<div class="notice-card">
+      <div style="display:flex;justify-content:space-between;margin-bottom:8px;border-bottom:1px dashed #eee;padding-bottom:6px;">
+        <b style="font-size:14px;">${n.title}</b>
+        <span style="font-size:12px;color:var(--text-2)">${n.date}</span>
+      </div>
+      <div style="font-size:13px;color:var(--text-2);white-space:pre-wrap;word-break:break-word;">${n.content}</div>
+      <div class="btn-row">
+        <button class="btn" onclick="editNotice(${trueIdx})">编辑</button>
+        <button class="btn danger" onclick="deleteNotice(${trueIdx})">删除</button>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function renderSites() {
   const wrap = document.getElementById("siteList");
-  
-  // 收集所有分组
   const allGroups = [...currentGroups];
   registry.sites.forEach(s => { if(s.group && !allGroups.includes(s.group)) allGroups.push(s.group); });
 
   const html = [];
   allGroups.forEach(g => {
     const items = registry.sites.filter(s => s.group === g);
-    if(!items.length && !currentGroups.includes(g)) return; // 空的自定义分组不显示
+    if(!items.length && !currentGroups.includes(g)) return;
     
     const isCollapsed = collapsedGroups.includes(g);
     html.push(`<section class="group ${isCollapsed ? 'collapsed' : ''}" data-group="${g}">
@@ -139,7 +178,7 @@ function render() {
   });
 
   if(registry.sites.length === 0) {
-    wrap.innerHTML = `<div style="text-align:center;color:#999;padding:40px">暂无收录站点，点右上角新增</div>`;
+    wrap.innerHTML = `<div style="text-align:center;color:#999;padding:20px">暂无收录站点</div>`;
   } else {
     wrap.innerHTML = html.join("");
   }
@@ -165,67 +204,58 @@ window.toggleGroup = (g) => {
   const idx = collapsedGroups.indexOf(g);
   if (idx >= 0) collapsedGroups.splice(idx, 1);
   else collapsedGroups.push(g);
-  render();
+  renderSites();
 };
 
 window.deleteSite = (id) => {
   if (!confirm('确定删除该站点？')) return;
   registry.sites = registry.sites.filter(s => s.id !== id);
-  render();
+  renderSites();
 };
 
 window.editSite = (id) => {
   const s = registry.sites.find(x => x.id === id);
   if(!s) return;
-  openForm(s);
+  openSiteForm(s);
 };
 
-function openForm(site) {
+window.deleteNotice = (idx) => {
+  if(!confirm('确定删除这条公告？')) return;
+  registry.notice.splice(idx, 1);
+  renderNotices();
+};
+
+window.editNotice = (idx) => {
+  openNoticeForm(registry.notice[idx], idx);
+};
+
+function openSiteForm(site) {
   const isEdit = !!site;
   const s = site || { id: "r_" + Date.now(), name: "", invite: "", group: currentGroups[0], tags: [], note: "" };
   
-  // 构建分组 Chip
-  const groupChips = currentGroups.map(g => 
-    `<div class="chip ${s.group === g ? 'active' : ''}" data-group="${g}">${g}</div>`
-  ).join("");
-
-  // 构建标签 Chip
-  const tagChips = currentTags.map(t => 
-    `<div class="chip ${(s.tags||[]).includes(t) ? 'active' : ''}" data-tag="${t}">${t}</div>`
-  ).join("");
+  const groupChips = currentGroups.map(g => `<div class="chip ${s.group === g ? 'active' : ''}" data-group="${g}">${g}</div>`).join("");
+  const tagChips = currentTags.map(t => `<div class="chip ${(s.tags||[]).includes(t) ? 'active' : ''}" data-tag="${t}">${t}</div>`).join("");
 
   document.getElementById("modalBox").innerHTML = `
     <h3>${isEdit ? '编辑站点' : '新增站点'}</h3>
     <input type="hidden" id="f-id" value="${s.id}">
-    
     <div class="field"><label>站名 *</label><input id="f-name" value="${s.name}"></div>
     <div class="field"><label>链接 *</label><input id="f-invite" value="${s.invite}"></div>
-    
-    <div class="field"><label>分组（点击选择）</label>
-      <div class="chip-row" id="groupPicker">${groupChips}</div>
-    </div>
-
-    <div class="field"><label>标签（点击多选）</label>
-      <div class="chip-row" id="tagPicker">${tagChips}</div>
-    </div>
-
+    <div class="field"><label>分组（点击选择）</label><div class="chip-row" id="groupPicker">${groupChips}</div></div>
+    <div class="field"><label>标签（点击多选）</label><div class="chip-row" id="tagPicker">${tagChips}</div></div>
     <div class="field"><label>备注</label><textarea id="f-note">${s.note||''}</textarea></div>
-    
     <div class="btn-row" style="border:none;margin-top:20px;">
       <button class="btn" onclick="closeModal()">取消</button>
-      <button class="btn primary" onclick="saveForm()">保存</button>
+      <button class="btn primary" onclick="saveSiteForm()">保存</button>
     </div>
   `;
 
-  // 绑定分组单选
   document.querySelectorAll("#groupPicker .chip").forEach(c => {
     c.onclick = () => {
       document.querySelectorAll("#groupPicker .chip").forEach(el => el.classList.remove("active"));
       c.classList.add("active");
     };
   });
-
-  // 绑定标签多选
   document.querySelectorAll("#tagPicker .chip").forEach(c => {
     c.onclick = () => c.classList.toggle("active");
   });
@@ -233,7 +263,7 @@ function openForm(site) {
   document.getElementById("modalMask").classList.add("show");
 }
 
-window.saveForm = () => {
+window.saveSiteForm = () => {
   const id = document.getElementById("f-id").value;
   const name = document.getElementById("f-name").value.trim();
   const invite = document.getElementById("f-invite").value.trim();
@@ -241,9 +271,7 @@ window.saveForm = () => {
 
   const activeGroup = document.querySelector("#groupPicker .chip.active");
   const group = activeGroup ? activeGroup.dataset.group : "其他";
-  
   const tags = [...document.querySelectorAll("#tagPicker .chip.active")].map(c => c.dataset.tag);
-
   const obj = { id, name, invite, group, tags, note: document.getElementById("f-note").value.trim() };
   
   const idx = registry.sites.findIndex(x => x.id === id);
@@ -251,21 +279,49 @@ window.saveForm = () => {
   else registry.sites.push(obj);
 
   closeModal();
-  render();
+  renderSites();
 };
 
-window.closeModal = () => {
-  document.getElementById("modalMask").classList.remove("show");
+function openNoticeForm(notice, idx) {
+  const isEdit = idx !== undefined;
+  const n = notice || { date: new Date().toISOString().split('T')[0], title: "", content: "" };
+
+  document.getElementById("modalBox").innerHTML = `
+    <h3>${isEdit ? '编辑公告' : '发布新公告'}</h3>
+    <input type="hidden" id="n-idx" value="${isEdit ? idx : ''}">
+    <div class="field"><label>日期</label><input id="n-date" value="${n.date}"></div>
+    <div class="field"><label>标题</label><input id="n-title" value="${n.title}"></div>
+    <div class="field"><label>内容（支持换行）</label><textarea id="n-content" style="min-height:120px">${n.content}</textarea></div>
+    <div class="btn-row" style="border:none;margin-top:20px;">
+      <button class="btn" onclick="closeModal()">取消</button>
+      <button class="btn primary" onclick="saveNoticeForm()">保存</button>
+    </div>
+  `;
+  document.getElementById("modalMask").classList.add("show");
+}
+
+window.saveNoticeForm = () => {
+  const idxStr = document.getElementById("n-idx").value;
+  const date = document.getElementById("n-date").value.trim();
+  const title = document.getElementById("n-title").value.trim();
+  const content = document.getElementById("n-content").value.trim();
+  if(!title || !content) return alert("标题和内容必填");
+
+  const obj = { date, title, content };
+  if(idxStr !== '') {
+    registry.notice[Number(idxStr)] = obj;
+  } else {
+    registry.notice.push(obj); // 新公告放在最后面，显示时会倒序在最前面
+  }
+  closeModal();
+  renderNotices();
 };
 
 function openSettings() {
-  const noticeStr = (registry.notice || []).map(n => `${n.date}|${n.title}|${n.content}`).join('\n');
   document.getElementById("modalBox").innerHTML = `
-    <h3>全局设置</h3>
-    <div class="notice-box">公告格式为：日期|标题|内容（换行表示多条）</div>
+    <h3>联系方式设置</h3>
     <div class="field"><label>联系邮箱</label><input id="c-email" value="${registry.contact?.email||''}"></div>
     <div class="field"><label>联系 QQ</label><input id="c-qq" value="${registry.contact?.qq||''}"></div>
-    <div class="field"><label>公告列表</label><textarea id="c-notice" style="min-height:120px">${noticeStr}</textarea></div>
     <div class="btn-row" style="border:none;margin-top:20px;">
       <button class="btn" onclick="closeModal()">取消</button>
       <button class="btn primary" onclick="saveSettings()">保存</button>
@@ -279,15 +335,12 @@ window.saveSettings = () => {
     email: document.getElementById("c-email").value.trim(),
     qq: document.getElementById("c-qq").value.trim()
   };
-  registry.notice = document.getElementById("c-notice").value.split('\n').filter(l=>l.includes('|')).map(l => {
-    const parts = l.split('|');
-    return { date: parts[0].trim(), title: parts[1].trim(), content: parts.slice(2).join('|').trim() };
-  });
   closeModal();
-  alert("设置已更新，请记得导出");
+  alert("联系方式已更新，请记得导出");
 };
 
-document.getElementById("btnAddSite").onclick = () => openForm(null);
+document.getElementById("btnAddSite").onclick = () => openSiteForm(null);
+document.getElementById("btnAddNotice").onclick = () => openNoticeForm(null);
 document.getElementById("btnSettings").onclick = openSettings;
 
 document.getElementById("btnExport").onclick = () => {
@@ -299,6 +352,10 @@ document.getElementById("btnExport").onclick = () => {
   document.body.appendChild(dlAnchor);
   dlAnchor.click();
   dlAnchor.remove();
+};
+
+window.closeModal = () => {
+  document.getElementById("modalMask").classList.remove("show");
 };
 
 document.getElementById("modalMask").onclick = e => {
