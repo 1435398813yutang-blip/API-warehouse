@@ -343,8 +343,14 @@ function openSiteForm(id) {
     <div class="field"><label>货币单位</label><select id="f-currency"><option value="" ${!s.currency ? "selected" : ""}>不换算</option><option value="USD" ${s.currency === "USD" ? "selected" : ""}>USD</option><option value="CNY" ${s.currency === "CNY" ? "selected" : ""}>CNY</option></select></div>
     <div class="field"><label>人民币换算比例（1额度＝？人民币）</label><input id="f-ratio" value="${esc(s.modelRatio)}" placeholder="默认 0.002"><div class="hint">用于模型比价时的价格折算</div></div>
 
+    <div style="text-align:center; margin: 16px 0 10px;">
+      <a href="javascript:void(0)" id="btnTutorialFromForm" style="color:var(--accent); font-size:13px; text-decoration:none;">👉 不知道怎么填？点此查看换算教程</a>
+    </div>
     <div class="btn-row"><button class="btn" id="btnCancel">取消</button><button class="btn primary" id="btnSave">保存</button></div>
   `);
+  
+  document.getElementById("btnTutorialFromForm").onclick = showTutorial;
+
   document.querySelectorAll("#tagPicker .chip").forEach(c => c.onclick = () => c.classList.toggle("active"));
   document.getElementById("btnCancel").onclick = closeModal;
   document.getElementById("btnSave").onclick = () => {
@@ -621,9 +627,25 @@ function showTutorial() {
     </div>
 
     <div id="tut2" style="display:none; font-size:13px; line-height:1.6; color:var(--text-2);">
-      <p>由于浏览器跨域安全限制，你需要配置一个 Cloudflare Worker 代理。</p>
-      <b>第一步：</b>登录 Cloudflare，在左侧菜单点击 <b>Workers & Pages</b> -> <b>Create Worker</b>，随便起个名字并部署。<br>
-      <b>第二步：</b>点击 <b>Edit code</b>，将里面的代码全删掉，替换为下方代码并点击右上角 <b>Deploy</b> 部署：<br>
+      <p>由于浏览器的跨域安全限制，前端网页无法直接拉取其他站点的余额。你需要免费配置一个 Cloudflare Worker 作为中转代理。</p>
+      
+      <b>【第一步：注册并创建 Worker】</b><br>
+      1. 访问并登录 Cloudflare 官网 (dash.cloudflare.com)。<br>
+      2. 在左侧菜单栏找到并点击 “Workers & Pages”。<br>
+      <img src="https://1435398813yutang-blip.github.io/tuchuang/%E4%BB%A3%E7%90%861.jpg" style="max-width:100%; border-radius:6px; margin:8px 0; border:1px solid var(--border);"><br>
+      3. 点击 “Create application” 按钮，选择 “Create Worker”。<br>
+      <img src="https://1435398813yutang-blip.github.io/tuchuang/%E4%BB%A3%E7%90%862.jpg" style="max-width:100%; border-radius:6px; margin:8px 0; border:1px solid var(--border);"><br>
+      <img src="https://1435398813yutang-blip.github.io/tuchuang/%E4%BB%A3%E7%90%863.jpg" style="max-width:100%; border-radius:6px; margin:8px 0; border:1px solid var(--border);"><br>
+      4. 保持默认或随便起一个名字（例如 my-proxy），点击 “Deploy” 部署。<br>
+      <img src="https://1435398813yutang-blip.github.io/tuchuang/%E4%BB%A3%E7%90%864.jpg" style="max-width:100%; border-radius:6px; margin:8px 0; border:1px solid var(--border);"><br><br>
+
+      <b>【第二步：粘贴代理代码】</b><br>
+      1. 部署完成后，点击页面上的 “Edit code” 按钮进入代码编辑界面。<br>
+      <img src="https://1435398813yutang-blip.github.io/tuchuang/%E4%BB%A3%E7%90%865.jpg" style="max-width:100%; border-radius:6px; margin:8px 0; border:1px solid var(--border);"><br>
+      2. 将左侧代码框里默认的代码全部删除。<br>
+      3. 复制下方提供的代理代码，粘贴进去，然后点击右上角的 “Save and deploy” 部署。<br>
+      <img src="https://1435398813yutang-blip.github.io/tuchuang/%E4%BB%A3%E7%90%866.jpg" style="max-width:100%; border-radius:6px; margin:8px 0; border:1px solid var(--border);"><br>
+      
       <div style="background:#2d2b28; color:#fff; padding:10px; border-radius:6px; font-family:monospace; font-size:11px; overflow-x:auto; white-space:pre; margin:8px 0;">export default {
   async fetch(request) {
     if (request.method === 'OPTIONS') return new Response(null, { headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Allow-Headers': '*' } });
@@ -640,7 +662,14 @@ function showTutorial() {
     } catch (e) { return new Response(e.message, { status: 500, headers: { 'Access-Control-Allow-Origin': '*' } }); }
   }
 };</div>
-      <b>第三步：</b>部署完成后，你会得到一个 <code>https://xxx.workers.dev</code> 的网址。把它复制，填入上方的“网络代理”输入框中保存即可。
+      <br>
+
+      <b>【第三步：填入代理地址】</b><br>
+      部署成功后，页面上方会显示一个类似 https://xxx.workers.dev 的网址。<br>
+      1. 复制这个网址。<br>
+      <img src="https://1435398813yutang-blip.github.io/tuchuang/%E4%BB%A3%E7%90%867.jpg" style="max-width:100%; border-radius:6px; margin:8px 0; border:1px solid var(--border);"><br>
+      2. 回到 API小仓库的 “设置” 页面。<br>
+      3. 将网址粘贴到 “网络代理” 输入框中，保存即可。
     </div>
 
     <div class="btn-row"><button class="btn" onclick="closeModal()">关闭</button></div>
