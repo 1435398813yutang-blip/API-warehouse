@@ -9,6 +9,7 @@ function defaultSettings() {
     theme: "morandi",
     wallpaper: { type: "none", value: "", opacity: 0.82 },
     appName: "API小仓库",
+    proxyUrl: "", // 代理地址
     groups: ["付费站", "公益站", "有签到", "限制签到", "生图站"],
     tags: ["试吃", "无试吃", "试吃不确定", "需邀请码", "关闭注册", "生图", "视频", "音频", "抗截断", "常用"],
     sortMode: "custom",
@@ -226,45 +227,87 @@ function copyInvite(id) { const s = state.sites.find(x => x.id === id); if (!s) 
 function fallbackCopy(text) { const ta = document.createElement("textarea"); ta.value = text; document.body.appendChild(ta); ta.select(); try { document.execCommand("copy"); toast("已复制链接"); } catch { toast("复制失败"); } document.body.removeChild(ta); }
 function deleteSite(id) { const s = state.sites.find(x => x.id === id); if (!s) return; if (!confirm(`确定删除「${s.name}」？`)) return; state.sites = state.sites.filter(x => x.id !== id); store.saveSites(state.sites); renderList(); toast("已删除"); }
 
-/* ====== 拉取余额逻辑 ====== */
+/* ====== 核心：带代理的请求与多平台余额解析 ====== */
+async function fetchWithProxy(url, options = {}) {
+  const proxy = state.settings.proxyUrl;
+  if (proxy) {
+    // 如果配置了代理，将目标 URL 拼接进去
+    const target = encodeURIComponent(url);
+    return fetch(`${proxy}?target=${target}`, options);
+  }
+  // 没配置代理，直接请求（可能失败）
+  return fetch(url, options);
+}
+
 async function fetchBalance(id) {
   const s = state.sites.find(x => x.id === id);
   if (!s) return;
+  
+  const type = s.siteType || "newapi";
+  if (type === "manual") return toast("该站点设置为手动模式，请直接编辑填写");
   if (!s.apiEndpoint) return toast("请先在「编辑」中填写 API 端点");
   if (!s.accessToken) return toast("请先在「编辑」中填写 访问令牌");
-  
+
   toast("正在拉取余额...");
   try {
-    const url = s.apiEndpoint.replace(/\/+$/, "") + "/api/user/self";
-    const headers = { "Authorization": "Bearer " + s.accessToken };
-    if (s.userId) headers["New-Api-User"] = s.userId;
+    let url = s.apiEndpoint.replace(/\/+$/, "");
+    let headers = { "Authorization": "Bearer " + s.accessToken };
+    
+    // 根据不同类型拼接不同路径
+    if (type === "newapi") {
+      url += "/api/user/self";
+      if (s.userId) headers["New-Api-User"] = s.userId;
+    } else if (type === "sub2api") {
+      url += "/api/v1/auth/me";
+    } else if (type === "deepseek") {
+      url += "/user/balance";
+    } else if (type === "siliconflow") {
+      url += "/v1/user/info";
+    }
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
-    const res = await fetch(url, { headers, signal: controller.signal });
+    const timeoutId = setTimeout(() => controller.abort(), 8000); // 代理可能稍慢，给8秒
+    const res = await fetchWithProxy(url, { headers, signal: controller.signal });
     clearTimeout(timeoutId);
 
-    if (!res.ok) throw new Error("请求失败");
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
-    
-    if (data && data.data && data.data.quota !== undefined) {
-      s.balance = String(data.data.quota);
+    let newBalance = "";
+
+    // 解析返回值
+    if (type === "newapi") {
+      if (data && data.data && data.data.quota !== undefined) newBalance = String(data.data.quota);
+    } else if (type === "sub2api") {
+      if (data && data.data && data.data.quota !== undefined) newBalance = String(data.data.quota);
+      else if (data && data.quota !== undefined) newBalance = String(data.quota);
+    } else if (type === "deepseek") {
+      if (data && data.balance_infos && data.balance_infos.length > 0) {
+        newBalance = data.balance_infos[0].total_balance;
+      }
+    } else if (type === "siliconflow") {
+      if (data && data.data && data.data.totalBalance !== undefined) newBalance = String(data.data.totalBalance);
+      else if (data && data.totalBalance !== undefined) newBalance = String(data.totalBalance);
+    }
+
+    if (newBalance !== "") {
+      s.balance = newBalance;
       store.saveSites(state.sites);
       renderList();
       toast("余额已成功更新");
     } else {
-      throw new Error("接口返回格式不支持");
+      throw new Error("未找到余额字段");
     }
   } catch (err) {
     console.error(err);
-    toast("拉取失败(可能跨域被拦截)，请去站点内手动查看并填写");
+    toast("拉取失败，请检查代理配置或去站点手动查看");
   }
 }
 
 function openSiteForm(id) {
   const editing = id ? state.sites.find(x => x.id === id) : null;
-  const s = editing || { name: "", invite: "", group: state.settings.groups[0] || "付费站", tags: [], note: "", hasCheckin: false, todayCheckedIn: false, lastCheckinDate: "", balance: "", quotaPerUnit: "", currency: "", apiEndpoint: "", accessToken: "", userId: "", cnyRate: "" };
+  const s = editing || { name: "", invite: "", group: state.settings.groups[0] || "付费站", tags: [], note: "", hasCheckin: false, todayCheckedIn: false, lastCheckinDate: "", balance: "", quotaPerUnit: "", currency: "", apiEndpoint: "", siteType: "newapi", accessToken: "", userId: "", cnyRate: "" };
   const tagPicker = state.settings.tags.map(t => `<span class="chip ${(s.tags || []).includes(t) ? "active" : ""}" data-tag="${esc(t)}">${esc(t)}</span>`).join("");
+  
   showModal(`
     <h3>${editing ? "编辑站点" : "添加站点"}</h3>
     <div class="field"><label>站名 *</label><input id="f-name" value="${esc(s.name)}"></div>
@@ -273,13 +316,24 @@ function openSiteForm(id) {
     <div class="field"><label>标签（可多选）</label><div class="tag-picker" id="tagPicker">${tagPicker}</div></div>
     <div class="field"><label>备注</label><textarea id="f-note">${esc(s.note)}</textarea></div>
     <div class="field"><label>是否有签到</label><select id="f-hasCheckin"><option value="0" ${!s.hasCheckin ? "selected" : ""}>否</option><option value="1" ${s.hasCheckin ? "selected" : ""}>是</option></select></div>
-    <div class="field"><label>余额</label><input id="f-balance" value="${esc(s.balance)}" placeholder="可手填，也可以在主界面点刷新自动拉取"></div>
+    <div class="field"><label>余额</label><input id="f-balance" value="${esc(s.balance)}" placeholder="可手填，也可点刷新自动拉取"></div>
     <div class="field"><label>换算比例（多少 quota = 1 单位）</label><input id="f-quota" value="${esc(s.quotaPerUnit)}" placeholder="可选，如 500000"></div>
     <div class="field"><label>货币单位</label><select id="f-currency"><option value="" ${!s.currency ? "selected" : ""}>不换算</option><option value="USD" ${s.currency === "USD" ? "selected" : ""}>USD</option><option value="CNY" ${s.currency === "CNY" ? "selected" : ""}>CNY</option></select></div>
-    <div class="field"><label>API 端点（用于拉取余额和模型价格）</label><input id="f-api" value="${esc(s.apiEndpoint)}" placeholder="https://xxx.com"></div>
+    
+    <div class="field"><label>站点架构类型（用于拉取余额）</label>
+      <select id="f-siteType">
+        <option value="newapi" ${s.siteType === "newapi" ? "selected" : ""}>New API 体系（大部分中转站）</option>
+        <option value="sub2api" ${s.siteType === "sub2api" ? "selected" : ""}>Sub2API 体系</option>
+        <option value="deepseek" ${s.siteType === "deepseek" ? "selected" : ""}>DeepSeek 官方</option>
+        <option value="siliconflow" ${s.siteType === "siliconflow" ? "selected" : ""}>硅基流动 SiliconFlow</option>
+        <option value="manual" ${s.siteType === "manual" ? "selected" : ""}>仅手动记录（不拉取）</option>
+      </select>
+    </div>
+    
+    <div class="field"><label>API 端点（用于拉取余额和模型价格）</label><input id="f-api" value="${esc(s.apiEndpoint)}" placeholder="如 https://api.xxx.com"></div>
     <div class="field"><label>人民币换算比例（比价时用）</label><input id="f-cnyRate" value="${esc(s.cnyRate)}" placeholder="比如 1 倍率=1.5元就填 1.5"></div>
-    <div class="field"><label>访问令牌（用于自动拉取余额）</label><input id="f-token" value="${esc(s.accessToken)}" placeholder="系统访问令牌，不是 sk-"></div>
-    <div class="field"><label>用户 ID（用于自动拉取余额）</label><input id="f-uid" value="${esc(s.userId)}"></div>
+    <div class="field"><label>访问令牌（用于自动拉取余额）</label><input id="f-token" value="${esc(s.accessToken)}" placeholder="系统访问令牌"></div>
+    <div class="field"><label>用户 ID（仅 New API 需要，可选）</label><input id="f-uid" value="${esc(s.userId)}"></div>
     <div class="btn-row"><button class="btn" id="btnCancel">取消</button><button class="btn primary" id="btnSave">保存</button></div>
   `);
   document.querySelectorAll("#tagPicker .chip").forEach(c => c.onclick = () => c.classList.toggle("active"));
@@ -296,6 +350,7 @@ function openSiteForm(id) {
       balance: document.getElementById("f-balance").value.trim(), quotaPerUnit: parseFloat(document.getElementById("f-quota").value) || "",
       currency: document.getElementById("f-currency").value, apiEndpoint: document.getElementById("f-api").value.trim(),
       cnyRate: parseFloat(document.getElementById("f-cnyRate").value) || "", accessToken: document.getElementById("f-token").value.trim(),
+      siteType: document.getElementById("f-siteType").value,
       userId: document.getElementById("f-uid").value.trim(), sourceId: s.sourceId || null, createdAt: s.createdAt || new Date().toISOString(), lastOpenedAt: s.lastOpenedAt || ""
     };
     if (editing) state.sites = state.sites.map(x => x.id === obj.id ? obj : x); else state.sites.push(obj);
@@ -349,8 +404,8 @@ window.openModelDrawer = (siteId) => {
 };
 
 document.getElementById("btnFetchPrices").onclick = async () => {
-  const sites = state.sites.filter(s => s.apiEndpoint);
-  if (!sites.length) return toast("请先给站点填写「API 端点」");
+  const sites = state.sites.filter(s => s.apiEndpoint && s.siteType !== "manual" && s.siteType !== "deepseek" && s.siteType !== "siliconflow");
+  if (!sites.length) return toast("没有支持拉取价格的中转站（请检查端点或类型）");
   const btn = document.getElementById("btnFetchPrices");
   btn.textContent = "拉取中…"; btn.disabled = true;
   let newPrices = []; let successCount = 0;
@@ -359,8 +414,8 @@ document.getElementById("btnFetchPrices").onclick = async () => {
     try {
       const url = s.apiEndpoint.replace(/\/+$/, "") + "/api/pricing";
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000);
-      const res = await fetch(url, { signal: controller.signal });
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
+      const res = await fetchWithProxy(url, { signal: controller.signal });
       clearTimeout(timeoutId);
       
       if (res.ok) {
@@ -385,7 +440,7 @@ document.getElementById("btnFetchPrices").onclick = async () => {
           successCount++;
         }
       }
-    } catch (e) { console.warn(`拉取 ${s.name} 失败(可能跨域拦截):`, e); }
+    } catch (e) { console.warn(`拉取 ${s.name} 失败:`, e); }
   }
 
   state.modelPrices = newPrices;
@@ -421,7 +476,7 @@ function renderRegistry() {
   wrap.querySelectorAll("[data-add]").forEach(btn => { btn.onclick = () => addFromRegistry(btn.dataset.add); });
 }
 function regCardHTML(s) { const added = state.sites.some(x => x.sourceId === s.id); const tags = (s.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join(""); return `<div class="reg-card"><div class="reg-top"><div class="reg-name">${(s.tags||[]).includes("常用") ? '<span style="color:var(--accent);margin-right:4px;font-size:15px">☆</span>' : ''}${esc(s.name)}</div><button class="mini-btn ${added ? "done" : ""}" data-add="${esc(s.id)}" ${added ? "disabled" : ""}>${added ? "已添加" : "添加"}</button></div><div class="card-tags">${tags}</div><div class="reg-note">${esc(s.group)}｜${linkify(s.note || "")}</div></div>`; }
-function addFromRegistry(rid) { const r = REGISTRY.sites.find(s => s.id === rid); if (!r) return; if (state.sites.some(x => x.sourceId === r.id)) { toast("已经添加过了"); return; } let host = ""; try { host = new URL(r.invite).origin; } catch {} const obj = { id: uid(), name: r.name, invite: r.invite, group: r.group, tags: [...(r.tags || [])], note: r.note || "", hasCheckin: ["有签到", "限制签到"].includes(r.group), todayCheckedIn: false, lastCheckinDate: "", balance: "", quotaPerUnit: "", currency: "", apiEndpoint: host ? host : "", cnyRate: "", accessToken: "", userId: "", sourceId: r.id, createdAt: new Date().toISOString(), lastOpenedAt: "" }; state.sites.push(obj); store.saveSites(state.sites); renderList(); renderRegistry(); toast(`已添加「${r.name}」`); }
+function addFromRegistry(rid) { const r = REGISTRY.sites.find(s => s.id === rid); if (!r) return; if (state.sites.some(x => x.sourceId === r.id)) { toast("已经添加过了"); return; } let host = ""; try { host = new URL(r.invite).origin; } catch {} const obj = { id: uid(), name: r.name, invite: r.invite, group: r.group, tags: [...(r.tags || [])], note: r.note || "", hasCheckin: ["有签到", "限制签到"].includes(r.group), todayCheckedIn: false, lastCheckinDate: "", balance: "", quotaPerUnit: "", currency: "", apiEndpoint: host ? host : "", siteType: "newapi", cnyRate: "", accessToken: "", userId: "", sourceId: r.id, createdAt: new Date().toISOString(), lastOpenedAt: "" }; state.sites.push(obj); store.saveSites(state.sites); renderList(); renderRegistry(); toast(`已添加「${r.name}」`); }
 
 function openSettings() {
   const s = state.settings; const w = s.wallpaper || { type: "none", value: "", opacity: 0.82 }; const presetColors = ["#e8e4dd","#d4d9d6","#cfd6dc","#e3d8d2","#dcd8d0","#d9d5d0"];
@@ -429,6 +484,12 @@ function openSettings() {
     <h3>设置</h3>
     <div class="settings-section"><h4>主题</h4><div class="theme-row"><button class="theme-btn ${s.theme !== "mono" ? "active" : ""}" data-theme-btn="morandi">莫兰迪</button><button class="theme-btn ${s.theme === "mono" ? "active" : ""}" data-theme-btn="mono">极简黑白</button></div></div>
     <div class="settings-section"><h4>应用名称</h4><input id="s-appName" value="${esc(s.appName)}" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--radius);background:#ffffff !important;color:#2d2b28 !important;-webkit-appearance:none;"></div>
+    
+    <div class="settings-section">
+      <h4>网络代理（解决跨域拉取余额）</h4>
+      <div class="field"><input id="s-proxyUrl" value="${esc(s.proxyUrl || '')}" placeholder="填入你的 Cloudflare Worker 地址"><div class="hint">不填将无法自动拉取。请自行部署（教程见下方）。</div></div>
+    </div>
+
     <div class="settings-section">
       <h4>壁纸</h4>
       <div class="field"><label>类型</label><select id="s-wallType"><option value="none" ${w.type === "none" ? "selected" : ""}>无</option><option value="color" ${w.type === "color" ? "selected" : ""}>纯色</option><option value="image" ${w.type === "image" ? "selected" : ""}>图片 URL / 本地上传</option></select></div>
@@ -448,6 +509,8 @@ function openSettings() {
   `);
   document.querySelectorAll("[data-theme-btn]").forEach(b => { b.onclick = () => { s.theme = b.dataset.themeBtn; store.saveSettings(s); applyTheme(); openSettings(); }; });
   document.getElementById("s-appName").oninput = e => { s.appName = e.target.value || "API小仓库"; store.saveSettings(s); applyWallpaper(); };
+  document.getElementById("s-proxyUrl").oninput = e => { s.proxyUrl = e.target.value.trim(); store.saveSettings(s); };
+  
   const preview = () => { const type = document.getElementById("s-wallType").value; const opacity = parseInt(document.getElementById("s-opacity").value, 10) / 100; let value = ""; if (type === "color") { value = document.getElementById("s-wallColor").value; } else if (type === "image") { value = document.getElementById("s-wallValue").value.trim(); if (!value && s.wallpaper.type === "image" && s.wallpaper.value.startsWith('data:')) value = s.wallpaper.value; } s.wallpaper = { type, value, opacity }; store.saveSettings(s); applyWallpaper(); const pv = document.getElementById("wallPreview"); let css = "transparent"; if (type === "color") css = value || "transparent"; else if (type === "image") css = value ? `url("${value}") center/cover no-repeat` : "transparent"; pv.style.background = css; };
   const typeSel = document.getElementById("s-wallType"); typeSel.onchange = () => { const t = typeSel.value; document.getElementById("colorField").style.display = t === "color" ? "block" : "none"; document.getElementById("valueField").style.display = t === "image" ? "block" : "none"; preview(); };
   const colorInput = document.getElementById("s-wallColor"); colorInput.oninput = preview; colorInput.onchange = preview; document.querySelectorAll("#presetColors .preset-color").forEach(el => { el.onclick = () => { colorInput.value = el.dataset.color; preview(); }; });
