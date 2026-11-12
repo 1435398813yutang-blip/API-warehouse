@@ -82,8 +82,26 @@
       <h2 style="margin:0; font-family:Georgia,serif; font-size:17px;">模型比价</h2>
       <button class="text-btn" style="color:var(--accent)" id="btnFetchPrices">↻ 更新价格</button>
     </div>
-    <div class="search-bar show" style="padding:0; border:none; background:transparent;">
+    
+    <div class="search-bar show" style="padding:0; border:none; background:transparent; margin-bottom:10px;">
       <input id="modelSearchInput" type="search" placeholder="输入模型名，如 gpt-4o…">
+    </div>
+
+    <div class="filter-wrap" style="padding:0;">
+      <div class="filter-head" id="modelFilterToggle" style="padding:10px 0 4px;">
+        <span id="modelFilterTitle">筛选（点击展开）</span>
+        <span class="arrow" id="modelFilterArrow">▼</span>
+      </div>
+      <div class="filter-content" id="modelFilterContent" style="display:none">
+        <div class="filter-block">
+          <span class="filter-label">供应商</span>
+          <div class="chip-row" id="providerFilter"></div>
+        </div>
+        <div class="filter-block">
+          <span class="filter-label">计费类型</span>
+          <div class="chip-row" id="priceTypeFilter"></div>
+        </div>
+      </div>
     </div>
   </div>
   <div class="model-list" id="modelList"></div>
