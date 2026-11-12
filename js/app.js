@@ -9,13 +9,14 @@ function defaultSettings() {
     theme: "morandi",
     wallpaper: { type: "none", value: "", opacity: 0.82 },
     appName: "API小仓库",
-    proxyUrl: "", // 代理地址
+    proxyUrl: "", 
     groups: ["付费站", "公益站", "有签到", "限制签到", "生图站"],
     tags: ["试吃", "无试吃", "试吃不确定", "需邀请码", "关闭注册", "生图", "视频", "音频", "抗截断", "常用"],
     sortMode: "custom",
     collapsedGroups: [],
     filterCollapsed: true,
-    regFilterCollapsed: true
+    regFilterCollapsed: true,
+    modelFilterCollapsed: true
   };
 }
 
@@ -43,6 +44,8 @@ const state = {
   filterTags: [],
   search: "",
   modelSearch: "",
+  providerFilter: [],
+  priceTypeFilter: [],
   regFilterGroup: "all",
   regFilterTags: [],
   regCollapsed: []
@@ -88,7 +91,7 @@ async function init() {
 
   applyTheme(); applyWallpaper();
   renderGroupFilter(); renderTagFilter(); renderList(); renderRegistry(); renderModelList();
-  updateFilterUI(); updateRegFilterUI(); bindEvents();
+  updateFilterUI(); updateRegFilterUI(); updateModelFilterUI(); bindEvents();
 }
 
 function applyTheme() { document.documentElement.setAttribute("data-theme", state.settings.theme === "mono" ? "mono" : "morandi"); }
@@ -119,6 +122,7 @@ window.switchTab = (tab) => {
 /* ====== 仓库逻辑 ====== */
 function updateFilterUI() { const c = document.getElementById("filterContent"); const t = document.getElementById("filterTitle"); const a = document.getElementById("filterArrow"); if (state.settings.filterCollapsed) { c.style.display = "none"; t.textContent = "筛选与排序（点击展开）"; a.style.transform = "rotate(-90deg)"; } else { c.style.display = "block"; t.textContent = "筛选与排序（点击收起）"; a.style.transform = "rotate(0deg)"; } }
 function updateRegFilterUI() { const c = document.getElementById("regFilterContent"); const t = document.getElementById("regFilterTitle"); const a = document.getElementById("regFilterArrow"); if (state.settings.regFilterCollapsed) { c.style.display = "none"; t.textContent = "筛选（点击展开）"; a.style.transform = "rotate(-90deg)"; } else { c.style.display = "block"; t.textContent = "筛选（点击收起）"; a.style.transform = "rotate(0deg)"; } }
+function updateModelFilterUI() { const c = document.getElementById("modelFilterContent"); const t = document.getElementById("modelFilterTitle"); const a = document.getElementById("modelFilterArrow"); if (state.settings.modelFilterCollapsed) { c.style.display = "none"; t.textContent = "筛选（点击展开）"; a.style.transform = "rotate(-90deg)"; } else { c.style.display = "block"; t.textContent = "筛选（点击收起）"; a.style.transform = "rotate(0deg)"; } }
 
 function renderGroupFilter() {
   const wrap = document.getElementById("groupFilter");
@@ -194,17 +198,20 @@ function renderList() {
 }
 
 function balanceText(s) {
-  let extra = "";
+  let mainAmount = s.balance || "未记录";
+  let subAmount = "";
+  
   if (s.balance && s.quotaPerUnit && s.currency) {
     const n = parseFloat(s.balance);
-    if (!isNaN(n) && s.quotaPerUnit > 0) extra = `（约 ${(n / s.quotaPerUnit).toFixed(2)} ${s.currency}）`;
+    if (!isNaN(n) && s.quotaPerUnit > 0) {
+      mainAmount = (n / s.quotaPerUnit).toFixed(2) + " " + s.currency;
+      subAmount = ` (原始: ${s.balance})`;
+    }
   }
   
-  if (s.balance) {
-    return `<span class="balance">余额 <b>${esc(s.balance)}</b>${esc(extra)}</span> <button class="mini-btn" data-act="fetchBalance" style="padding:2px 5px; font-size:11px;">↻</button>`;
-  } else {
-    return `<span class="balance">余额 <b>未记录</b></span> <button class="mini-btn" data-act="fetchBalance" style="padding:2px 5px; font-size:11px;">↻ 拉取</button>`;
-  }
+  const btn = s.siteType === "manual" ? "" : `<button class="mini-btn" data-act="fetchBalance" style="padding:2px 5px; font-size:11px; margin-left:4px;">↻</button>`;
+  
+  return `<span class="balance">余额 <b>${esc(mainAmount)}</b><span style="font-size:11px;color:#999">${esc(subAmount)}</span>${btn}</span>`;
 }
 function cardHTML(s) {
   const tags = (s.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join("");
@@ -231,11 +238,9 @@ function deleteSite(id) { const s = state.sites.find(x => x.id === id); if (!s) 
 async function fetchWithProxy(url, options = {}) {
   const proxy = state.settings.proxyUrl;
   if (proxy) {
-    // 如果配置了代理，将目标 URL 拼接进去
     const target = encodeURIComponent(url);
     return fetch(`${proxy}?target=${target}`, options);
   }
-  // 没配置代理，直接请求（可能失败）
   return fetch(url, options);
 }
 
@@ -253,7 +258,6 @@ async function fetchBalance(id) {
     let url = s.apiEndpoint.replace(/\/+$/, "");
     let headers = { "Authorization": "Bearer " + s.accessToken };
     
-    // 根据不同类型拼接不同路径
     if (type === "newapi") {
       url += "/api/user/self";
       if (s.userId) headers["New-Api-User"] = s.userId;
@@ -266,7 +270,7 @@ async function fetchBalance(id) {
     }
 
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8000); // 代理可能稍慢，给8秒
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
     const res = await fetchWithProxy(url, { headers, signal: controller.signal });
     clearTimeout(timeoutId);
 
@@ -274,7 +278,6 @@ async function fetchBalance(id) {
     const data = await res.json();
     let newBalance = "";
 
-    // 解析返回值
     if (type === "newapi") {
       if (data && data.data && data.data.quota !== undefined) newBalance = String(data.data.quota);
     } else if (type === "sub2api") {
@@ -305,7 +308,12 @@ async function fetchBalance(id) {
 
 function openSiteForm(id) {
   const editing = id ? state.sites.find(x => x.id === id) : null;
-  const s = editing || { name: "", invite: "", group: state.settings.groups[0] || "付费站", tags: [], note: "", hasCheckin: false, todayCheckedIn: false, lastCheckinDate: "", balance: "", quotaPerUnit: "", currency: "", apiEndpoint: "", siteType: "newapi", accessToken: "", userId: "", cnyRate: "" };
+  const s = editing || { 
+    name: "", invite: "", group: state.settings.groups[0] || "付费站", 
+    tags: [], note: "", hasCheckin: false, todayCheckedIn: false, lastCheckinDate: "", 
+    balance: "", quotaPerUnit: "500000", currency: "CNY", 
+    apiEndpoint: "", siteType: "newapi", accessToken: "", userId: "", modelRatio: "0.002" 
+  };
   const tagPicker = state.settings.tags.map(t => `<span class="chip ${(s.tags || []).includes(t) ? "active" : ""}" data-tag="${esc(t)}">${esc(t)}</span>`).join("");
   
   showModal(`
@@ -316,9 +324,6 @@ function openSiteForm(id) {
     <div class="field"><label>标签（可多选）</label><div class="tag-picker" id="tagPicker">${tagPicker}</div></div>
     <div class="field"><label>备注</label><textarea id="f-note">${esc(s.note)}</textarea></div>
     <div class="field"><label>是否有签到</label><select id="f-hasCheckin"><option value="0" ${!s.hasCheckin ? "selected" : ""}>否</option><option value="1" ${s.hasCheckin ? "selected" : ""}>是</option></select></div>
-    <div class="field"><label>余额</label><input id="f-balance" value="${esc(s.balance)}" placeholder="可手填，也可点刷新自动拉取"></div>
-    <div class="field"><label>换算比例（多少 quota = 1 单位）</label><input id="f-quota" value="${esc(s.quotaPerUnit)}" placeholder="可选，如 500000"></div>
-    <div class="field"><label>货币单位</label><select id="f-currency"><option value="" ${!s.currency ? "selected" : ""}>不换算</option><option value="USD" ${s.currency === "USD" ? "selected" : ""}>USD</option><option value="CNY" ${s.currency === "CNY" ? "selected" : ""}>CNY</option></select></div>
     
     <div class="field"><label>站点架构类型（用于拉取余额）</label>
       <select id="f-siteType">
@@ -329,11 +334,15 @@ function openSiteForm(id) {
         <option value="manual" ${s.siteType === "manual" ? "selected" : ""}>仅手动记录（不拉取）</option>
       </select>
     </div>
-    
     <div class="field"><label>API 端点（用于拉取余额和模型价格）</label><input id="f-api" value="${esc(s.apiEndpoint)}" placeholder="如 https://api.xxx.com"></div>
-    <div class="field"><label>人民币换算比例（比价时用）</label><input id="f-cnyRate" value="${esc(s.cnyRate)}" placeholder="比如 1 倍率=1.5元就填 1.5"></div>
     <div class="field"><label>访问令牌（用于自动拉取余额）</label><input id="f-token" value="${esc(s.accessToken)}" placeholder="系统访问令牌"></div>
     <div class="field"><label>用户 ID（仅 New API 需要，可选）</label><input id="f-uid" value="${esc(s.userId)}"></div>
+
+    <div class="field"><label>余额</label><input id="f-balance" value="${esc(s.balance)}" placeholder="可手填，也可点刷新自动拉取"></div>
+    <div class="field"><label>换算比例（1额度＝？quota）</label><input id="f-quota" value="${esc(s.quotaPerUnit)}" placeholder="默认 500000"></div>
+    <div class="field"><label>货币单位</label><select id="f-currency"><option value="" ${!s.currency ? "selected" : ""}>不换算</option><option value="USD" ${s.currency === "USD" ? "selected" : ""}>USD</option><option value="CNY" ${s.currency === "CNY" ? "selected" : ""}>CNY</option></select></div>
+    <div class="field"><label>人民币换算比例（1额度＝？人民币）</label><input id="f-ratio" value="${esc(s.modelRatio)}" placeholder="默认 0.002"><div class="hint">用于模型比价时的价格折算</div></div>
+
     <div class="btn-row"><button class="btn" id="btnCancel">取消</button><button class="btn primary" id="btnSave">保存</button></div>
   `);
   document.querySelectorAll("#tagPicker .chip").forEach(c => c.onclick = () => c.classList.toggle("active"));
@@ -347,9 +356,12 @@ function openSiteForm(id) {
       id: s.id || uid(), name, invite, group: document.getElementById("f-group").value.trim() || "其他", tags,
       note: document.getElementById("f-note").value.trim(), hasCheckin: document.getElementById("f-hasCheckin").value === "1",
       todayCheckedIn: s.todayCheckedIn || false, lastCheckinDate: s.lastCheckinDate || "",
-      balance: document.getElementById("f-balance").value.trim(), quotaPerUnit: parseFloat(document.getElementById("f-quota").value) || "",
-      currency: document.getElementById("f-currency").value, apiEndpoint: document.getElementById("f-api").value.trim(),
-      cnyRate: parseFloat(document.getElementById("f-cnyRate").value) || "", accessToken: document.getElementById("f-token").value.trim(),
+      balance: document.getElementById("f-balance").value.trim(), 
+      quotaPerUnit: parseFloat(document.getElementById("f-quota").value) || 500000, 
+      currency: document.getElementById("f-currency").value, 
+      apiEndpoint: document.getElementById("f-api").value.trim(),
+      modelRatio: parseFloat(document.getElementById("f-ratio").value) || 0.002, 
+      accessToken: document.getElementById("f-token").value.trim(),
       siteType: document.getElementById("f-siteType").value,
       userId: document.getElementById("f-uid").value.trim(), sourceId: s.sourceId || null, createdAt: s.createdAt || new Date().toISOString(), lastOpenedAt: s.lastOpenedAt || ""
     };
@@ -359,17 +371,77 @@ function openSiteForm(id) {
 }
 
 /* ====== 模型页与真实拉取逻辑 ====== */
+function getProvider(modelName) {
+  const n = modelName.toLowerCase();
+  if (n.includes("gpt") || n.includes("dall-e") || n.includes("whisper")) return "OpenAI";
+  if (n.includes("claude")) return "Anthropic";
+  if (n.includes("gemini") || n.includes("palm")) return "Google";
+  if (n.includes("llama")) return "Meta";
+  if (n.includes("qwen")) return "通义千问";
+  if (n.includes("glm")) return "智谱";
+  if (n.includes("deepseek")) return "DeepSeek";
+  return "其他";
+}
+
+function renderProviderFilter() {
+  const providers = ["全部", "OpenAI", "Anthropic", "Google", "Meta", "通义千问", "智谱", "DeepSeek", "其他"];
+  const wrap = document.getElementById("providerFilter");
+  wrap.innerHTML = providers.map(p => `<span class="chip ${state.providerFilter.includes(p) || (p==="全部" && state.providerFilter.length===0) ? "active" : ""}" data-p="${p}">${p}</span>`).join("");
+  wrap.querySelectorAll(".chip").forEach(c => {
+    c.onclick = () => {
+      const p = c.dataset.p;
+      if (p === "全部") state.providerFilter = [];
+      else {
+        const idx = state.providerFilter.indexOf(p);
+        if (idx >= 0) state.providerFilter.splice(idx, 1); else state.providerFilter.push(p);
+      }
+      renderProviderFilter(); renderModelList();
+    };
+  });
+}
+
+function renderPriceTypeFilter() {
+  const types = ["全部", "倍率", "单价"];
+  const wrap = document.getElementById("priceTypeFilter");
+  wrap.innerHTML = types.map(t => `<span class="chip ${state.priceTypeFilter.includes(t) || (t==="全部" && state.priceTypeFilter.length===0) ? "active" : ""}" data-t="${t}">${t}</span>`).join("");
+  wrap.querySelectorAll(".chip").forEach(c => {
+    c.onclick = () => {
+      const t = c.dataset.t;
+      if (t === "全部") state.priceTypeFilter = [];
+      else {
+        const idx = state.priceTypeFilter.indexOf(t);
+        if (idx >= 0) state.priceTypeFilter.splice(idx, 1); else state.priceTypeFilter.push(t);
+      }
+      renderPriceTypeFilter(); renderModelList();
+    };
+  });
+}
+
 function renderModelList() {
   const wrap = document.getElementById("modelList");
   if (!wrap) return;
+  renderProviderFilter();
+  renderPriceTypeFilter();
+
   let list = state.modelPrices.slice();
+  
   if (state.modelSearch.trim()) {
     const q = state.modelSearch.trim().toLowerCase();
     list = list.filter(m => m.modelName.toLowerCase().includes(q) || m.siteName.toLowerCase().includes(q));
   }
+  
+  if (state.providerFilter.length) {
+    list = list.filter(m => state.providerFilter.includes(getProvider(m.modelName)));
+  }
+  
+  if (state.priceTypeFilter.length) {
+    list = list.filter(m => state.priceTypeFilter.includes(m.priceType));
+  }
+
   list.sort((a, b) => a.cnyPrice - b.cnyPrice);
+
   if (!list.length) {
-    wrap.innerHTML = `<div class="empty">暂无数据<br>点击右上角「更新价格」拉取，或先添加带 API 端点的站点。</div>`;
+    wrap.innerHTML = `<div class="empty">暂无数据<br>点击右上角「更新价格」拉取，或更改筛选条件。</div>`;
     return;
   }
   wrap.innerHTML = list.map(m => `
@@ -405,7 +477,7 @@ window.openModelDrawer = (siteId) => {
 
 document.getElementById("btnFetchPrices").onclick = async () => {
   const sites = state.sites.filter(s => s.apiEndpoint && s.siteType !== "manual" && s.siteType !== "deepseek" && s.siteType !== "siliconflow");
-  if (!sites.length) return toast("没有支持拉取价格的中转站（请检查端点或类型）");
+  if (!sites.length) return toast("没有支持拉取价格的中转站");
   const btn = document.getElementById("btnFetchPrices");
   btn.textContent = "拉取中…"; btn.disabled = true;
   let newPrices = []; let successCount = 0;
@@ -428,11 +500,11 @@ document.getElementById("btnFetchPrices").onclick = async () => {
             if (modelName && rawRatio !== undefined) {
               const numRatio = parseFloat(rawRatio);
               if (!isNaN(numRatio)) {
-                const rate = s.cnyRate || 1;
+                const ratio = s.modelRatio || 0.002;
                 newPrices.push({
                   siteId: s.id, siteName: s.name, modelName: modelName,
                   rawPrice: rawRatio, priceType: item.model_ratio ? "倍率" : "单价",
-                  cnyPrice: numRatio * rate, unit: item.model_ratio ? "倍率折合" : "元/百万"
+                  cnyPrice: numRatio * ratio, unit: item.model_ratio ? "元 (倍率折合)" : "元/次或百万"
                 });
               }
             }
@@ -476,7 +548,7 @@ function renderRegistry() {
   wrap.querySelectorAll("[data-add]").forEach(btn => { btn.onclick = () => addFromRegistry(btn.dataset.add); });
 }
 function regCardHTML(s) { const added = state.sites.some(x => x.sourceId === s.id); const tags = (s.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join(""); return `<div class="reg-card"><div class="reg-top"><div class="reg-name">${(s.tags||[]).includes("常用") ? '<span style="color:var(--accent);margin-right:4px;font-size:15px">☆</span>' : ''}${esc(s.name)}</div><button class="mini-btn ${added ? "done" : ""}" data-add="${esc(s.id)}" ${added ? "disabled" : ""}>${added ? "已添加" : "添加"}</button></div><div class="card-tags">${tags}</div><div class="reg-note">${esc(s.group)}｜${linkify(s.note || "")}</div></div>`; }
-function addFromRegistry(rid) { const r = REGISTRY.sites.find(s => s.id === rid); if (!r) return; if (state.sites.some(x => x.sourceId === r.id)) { toast("已经添加过了"); return; } let host = ""; try { host = new URL(r.invite).origin; } catch {} const obj = { id: uid(), name: r.name, invite: r.invite, group: r.group, tags: [...(r.tags || [])], note: r.note || "", hasCheckin: ["有签到", "限制签到"].includes(r.group), todayCheckedIn: false, lastCheckinDate: "", balance: "", quotaPerUnit: "", currency: "", apiEndpoint: host ? host : "", siteType: "newapi", cnyRate: "", accessToken: "", userId: "", sourceId: r.id, createdAt: new Date().toISOString(), lastOpenedAt: "" }; state.sites.push(obj); store.saveSites(state.sites); renderList(); renderRegistry(); toast(`已添加「${r.name}」`); }
+function addFromRegistry(rid) { const r = REGISTRY.sites.find(s => s.id === rid); if (!r) return; if (state.sites.some(x => x.sourceId === r.id)) { toast("已经添加过了"); return; } let host = ""; try { host = new URL(r.invite).origin; } catch {} const obj = { id: uid(), name: r.name, invite: r.invite, group: r.group, tags: [...(r.tags || [])], note: r.note || "", hasCheckin: ["有签到", "限制签到"].includes(r.group), todayCheckedIn: false, lastCheckinDate: "", balance: "", quotaPerUnit: "500000", currency: "CNY", apiEndpoint: host ? host : "", siteType: "newapi", modelRatio: "0.002", accessToken: "", userId: "", sourceId: r.id, createdAt: new Date().toISOString(), lastOpenedAt: "" }; state.sites.push(obj); store.saveSites(state.sites); renderList(); renderRegistry(); toast(`已添加「${r.name}」`); }
 
 function openSettings() {
   const s = state.settings; const w = s.wallpaper || { type: "none", value: "", opacity: 0.82 }; const presetColors = ["#e8e4dd","#d4d9d6","#cfd6dc","#e3d8d2","#dcd8d0","#d9d5d0"];
@@ -487,7 +559,7 @@ function openSettings() {
     
     <div class="settings-section">
       <h4>网络代理（解决跨域拉取余额）</h4>
-      <div class="field"><input id="s-proxyUrl" value="${esc(s.proxyUrl || '')}" placeholder="填入你的 Cloudflare Worker 地址"><div class="hint">不填将无法自动拉取。请自行部署（教程见下方）。</div></div>
+      <div class="field"><input id="s-proxyUrl" value="${esc(s.proxyUrl || '')}" placeholder="填入你的 Cloudflare Worker 地址"><div class="hint">不填将无法自动拉取。<a href="javascript:void(0)" id="btnShowTutorial" style="color:var(--accent)">点此查看免费配置教程</a></div></div>
     </div>
 
     <div class="settings-section">
@@ -502,11 +574,13 @@ function openSettings() {
       <h4>数据</h4>
       <div class="btn-row" style="margin-top:0"><button class="btn" id="s-export">导出存档</button><button class="btn" id="s-import">导入存档</button></div>
       <label class="check-row"><input type="checkbox" id="s-exportTokens"> 导出时包含访问令牌（分享存档前请取消勾选）</label>
-      <div class="hint" style="margin-top:6px">导入会合并到现有站点，同 ID 覆盖。</div>
       <input type="file" id="s-file" accept="application/json" style="display:none">
     </div>
     <div class="btn-row"><button class="btn" id="s-close">关闭</button></div>
   `);
+  
+  document.getElementById("btnShowTutorial").onclick = showTutorial;
+
   document.querySelectorAll("[data-theme-btn]").forEach(b => { b.onclick = () => { s.theme = b.dataset.themeBtn; store.saveSettings(s); applyTheme(); openSettings(); }; });
   document.getElementById("s-appName").oninput = e => { s.appName = e.target.value || "API小仓库"; store.saveSettings(s); applyWallpaper(); };
   document.getElementById("s-proxyUrl").oninput = e => { s.proxyUrl = e.target.value.trim(); store.saveSettings(s); };
@@ -521,6 +595,56 @@ function openSettings() {
   document.getElementById("s-import").onclick = () => document.getElementById("s-file").click();
   document.getElementById("s-file").onchange = e => { const f = e.target.files[0]; if (!f) return; const reader = new FileReader(); reader.onload = () => { try { const data = JSON.parse(reader.result); if (!Array.isArray(data.sites)) throw new Error("格式不对"); if (!confirm(`导入 ${data.sites.length} 个站点，合并到现有列表？`)) return; data.sites.forEach(x => { if (!x.id) x.id = uid(); const idx = state.sites.findIndex(y => y.id === x.id); if (idx >= 0) state.sites[idx] = x; else state.sites.push(x); }); if (data.settings) { state.settings = Object.assign(state.settings, data.settings); store.saveSettings(state.settings); } store.saveSites(state.sites); closeModal(); applyTheme(); applyWallpaper(); renderGroupFilter(); renderTagFilter(); renderList(); renderRegistry(); toast("导入完成"); } catch (err) { toast("导入失败：" + err.message); } }; reader.readAsText(f); };
   document.getElementById("s-close").onclick = closeModal;
+}
+
+function showTutorial() {
+  showModal(`
+    <h3>使用教程</h3>
+    <div style="display:flex; gap:8px; margin-bottom:16px;">
+      <button class="btn primary" style="flex:1; font-size:13px;" onclick="document.getElementById('tut1').style.display='block';document.getElementById('tut2').style.display='none';">余额与比例</button>
+      <button class="btn" style="flex:1; font-size:13px;" onclick="document.getElementById('tut1').style.display='none';document.getElementById('tut2').style.display='block';">配置免费代理</button>
+    </div>
+    
+    <div id="tut1" style="font-size:13px; line-height:1.6; color:var(--text-2);">
+      <b>一、余额换算：用于首页显示真实余额</b><br>
+      中转站接口返回的余额数据通常是底层的“Quota（配额）”，数值极大。需要通过除法将其转换为真实的金额。<br>
+      1. <b>默认情况</b>：大多数标准站点的换算比例默认为 500000（即 1 额度 = 500000 quota）。<br>
+      2. <b>自定义计算</b>：如果拉取的金额与实际不符，请使用以下公式自行计算：<br>
+      <code>接口拉取的原始 Quota ÷ 网页显示的真实金额 = 换算比例</code><br>
+      *(例如：接口拉回 74737，网页实际余额为 1976.43 元，则 74737 ÷ 1976.43 ＝ 37.814。此时在“换算比例”填入 37.814 即可（也可以填整数或一位小数，只是数值越精确余额越精确。此比例仅用于让首页卡片显示正确的余额金额。)*<br><br>
+      
+      <b>二、模型单价换算：用于模型比价</b><br>
+      在“模型”页面中，接口拉取到的模型价格通常是“站点自定义额度”（如：12额度/次）或“倍率”（如：倍率 600）。需要通过乘法将其折算为人民币。<br>
+      1. <b>自定义额度计算</b>：参考站点的充值比例。如果充值 0.5 元可获得 100 额度，说明 1 额度 = 0.005 元。在“人民币换算比例”中填入 0.005，系统会将 12额度/次 自动计算为 0.06 元。<br>
+      2. <b>倍率计算</b>：大部分站点的标准倍率换算为 1 倍率 = 0.002 元。填入 0.002 即可。<br>
+      *(此比例仅用于模型比价页面的价格排序。)*
+    </div>
+
+    <div id="tut2" style="display:none; font-size:13px; line-height:1.6; color:var(--text-2);">
+      <p>由于浏览器跨域安全限制，你需要配置一个 Cloudflare Worker 代理。</p>
+      <b>第一步：</b>登录 Cloudflare，在左侧菜单点击 <b>Workers & Pages</b> -> <b>Create Worker</b>，随便起个名字并部署。<br>
+      <b>第二步：</b>点击 <b>Edit code</b>，将里面的代码全删掉，替换为下方代码并点击右上角 <b>Deploy</b> 部署：<br>
+      <div style="background:#2d2b28; color:#fff; padding:10px; border-radius:6px; font-family:monospace; font-size:11px; overflow-x:auto; white-space:pre; margin:8px 0;">export default {
+  async fetch(request) {
+    if (request.method === 'OPTIONS') return new Response(null, { headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Allow-Headers': '*' } });
+    const url = new URL(request.url);
+    const targetUrl = url.searchParams.get('target');
+    if (!targetUrl) return new Response('Missing', { status: 400 });
+    const modifiedRequest = new Request(targetUrl, request);
+    modifiedRequest.headers.delete('Origin'); modifiedRequest.headers.delete('Referer');
+    try {
+      const response = await fetch(modifiedRequest);
+      const newResponse = new Response(response.body, response);
+      newResponse.headers.set('Access-Control-Allow-Origin', '*');
+      return newResponse;
+    } catch (e) { return new Response(e.message, { status: 500, headers: { 'Access-Control-Allow-Origin': '*' } }); }
+  }
+};</div>
+      <b>第三步：</b>部署完成后，你会得到一个 <code>https://xxx.workers.dev</code> 的网址。把它复制，填入上方的“网络代理”输入框中保存即可。
+    </div>
+
+    <div class="btn-row"><button class="btn" onclick="closeModal()">关闭</button></div>
+  `);
 }
 
 function showModal(html) { const mask = document.getElementById("modalMask"); document.getElementById("modalBox").innerHTML = html; mask.classList.add("show"); }
@@ -547,6 +671,7 @@ function bindEvents() {
   document.getElementById("sortSelect").onchange = e => { state.settings.sortMode = e.target.value; store.saveSettings(state.settings); renderList(); };
   document.getElementById("filterToggle").onclick = () => { state.settings.filterCollapsed = !state.settings.filterCollapsed; store.saveSettings(state.settings); updateFilterUI(); };
   document.getElementById("regFilterToggle").onclick = () => { state.settings.regFilterCollapsed = !state.settings.regFilterCollapsed; store.saveSettings(state.settings); updateRegFilterUI(); };
+  document.getElementById("modelFilterToggle").onclick = () => { state.settings.modelFilterCollapsed = !state.settings.modelFilterCollapsed; store.saveSettings(state.settings); updateModelFilterUI(); };
   const panel = document.getElementById("registryPanel"); const entryBtn = document.getElementById("btnRegistry");
   entryBtn.onclick = () => { panel.hidden = !panel.hidden; if (panel.hidden) entryBtn.classList.remove("open"); else { entryBtn.classList.add("open"); renderRegistry(); } };
   document.getElementById("regClose").onclick = () => { panel.hidden = true; entryBtn.classList.remove("open"); renderRegistry(); };
