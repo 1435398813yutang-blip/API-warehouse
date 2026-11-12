@@ -140,6 +140,12 @@ main{padding:4px 16px 90px;position:relative;z-index:10}
   color:var(--bg);padding:8px 16px;border-radius:var(--radius);font-size:13px;z-index:100;
   opacity:0;transition:.2s;pointer-events:none}
 .toast.show{opacity:1}
-.notice-box{background:#ffffff !important;border:1.5px solid var(--border);
-  border-radius:var(--radius);padding:10px 12px;font-size:12px;color:#2d2b28 !important;
-  line-height:1.7;white-space:pre-wrap;margin-bottom:8px}
+
+/* ====== 新版公告卡片样式 ====== */
+.notice-contact{background:#fbfaf8;border:1.5px solid var(--border);border-radius:var(--radius);padding:12px;margin-bottom:16px;font-size:13px;color:var(--text-2);line-height:1.6;}
+.notice-contact b{color:var(--text);}
+.notice-card{background:#fff;border:1.5px solid var(--border);border-radius:var(--radius);padding:12px;margin-bottom:12px;}
+.notice-header{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;border-bottom:1px dashed #eee;padding-bottom:6px;}
+.notice-title{font-weight:600;font-size:14px;color:var(--text);}
+.notice-date{font-size:12px;color:var(--text-2);}
+.notice-content{font-size:13px;color:var(--text);line-height:1.6;white-space:pre-wrap;word-break:break-word;}
