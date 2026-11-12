@@ -188,17 +188,22 @@ function renderList() {
     card.querySelector('[data-act="copy"]')?.addEventListener("click", () => copyInvite(id));
     card.querySelector('[data-act="edit"]')?.addEventListener("click", () => openSiteForm(id));
     card.querySelector('[data-act="delete"]')?.addEventListener("click", () => deleteSite(id));
+    card.querySelector('[data-act="fetchBalance"]')?.addEventListener("click", () => fetchBalance(id));
   });
 }
 
 function balanceText(s) {
-  if (!s.balance) return "";
   let extra = "";
-  if (s.quotaPerUnit && s.currency) {
+  if (s.balance && s.quotaPerUnit && s.currency) {
     const n = parseFloat(s.balance);
     if (!isNaN(n) && s.quotaPerUnit > 0) extra = `（约 ${(n / s.quotaPerUnit).toFixed(2)} ${s.currency}）`;
   }
-  return `<span class="balance">余额 <b>${esc(s.balance)}</b>${esc(extra)}</span>`;
+  
+  if (s.balance) {
+    return `<span class="balance">余额 <b>${esc(s.balance)}</b>${esc(extra)}</span> <button class="mini-btn" data-act="fetchBalance" style="padding:2px 5px; font-size:11px;">↻</button>`;
+  } else {
+    return `<span class="balance">余额 <b>未记录</b></span> <button class="mini-btn" data-act="fetchBalance" style="padding:2px 5px; font-size:11px;">↻ 拉取</button>`;
+  }
 }
 function cardHTML(s) {
   const tags = (s.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join("");
@@ -208,7 +213,7 @@ function cardHTML(s) {
       <div class="card-name">${(s.tags || []).includes("常用") ? '<span class="pin">☆</span>' : ""}${esc(s.name)}</div>
       <div class="card-actions">${checkinBtn}<button class="mini-btn" data-act="copy">复制</button><button class="mini-btn" data-act="open">打开</button></div>
     </div>
-    <div class="card-meta"><span>${esc(s.group || "")}</span>${balanceText(s)}</div>
+    <div class="card-meta" style="margin-top:8px;"><span>${esc(s.group || "")}</span> ${balanceText(s)}</div>
     ${tags ? `<div class="card-tags">${tags}</div>` : ""}
     ${s.note ? `<div class="card-note">${linkify(s.note)}</div>` : ""}
     <div class="card-meta" style="margin-top:8px;gap:6px"><button class="mini-btn" data-act="edit">编辑</button><button class="mini-btn danger" data-act="delete">删除</button></div>
@@ -220,6 +225,41 @@ function toggleCheckin(id) { const s = state.sites.find(x => x.id === id); if (!
 function copyInvite(id) { const s = state.sites.find(x => x.id === id); if (!s) return; const text = s.invite || s.mainUrl || ""; if (navigator.clipboard?.writeText) { navigator.clipboard.writeText(text).then(() => toast("已复制链接")).catch(() => fallbackCopy(text)); } else fallbackCopy(text); }
 function fallbackCopy(text) { const ta = document.createElement("textarea"); ta.value = text; document.body.appendChild(ta); ta.select(); try { document.execCommand("copy"); toast("已复制链接"); } catch { toast("复制失败"); } document.body.removeChild(ta); }
 function deleteSite(id) { const s = state.sites.find(x => x.id === id); if (!s) return; if (!confirm(`确定删除「${s.name}」？`)) return; state.sites = state.sites.filter(x => x.id !== id); store.saveSites(state.sites); renderList(); toast("已删除"); }
+
+/* ====== 拉取余额逻辑 ====== */
+async function fetchBalance(id) {
+  const s = state.sites.find(x => x.id === id);
+  if (!s) return;
+  if (!s.apiEndpoint) return toast("请先在「编辑」中填写 API 端点");
+  if (!s.accessToken) return toast("请先在「编辑」中填写 访问令牌");
+  
+  toast("正在拉取余额...");
+  try {
+    const url = s.apiEndpoint.replace(/\/+$/, "") + "/api/user/self";
+    const headers = { "Authorization": "Bearer " + s.accessToken };
+    if (s.userId) headers["New-Api-User"] = s.userId;
+
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    const res = await fetch(url, { headers, signal: controller.signal });
+    clearTimeout(timeoutId);
+
+    if (!res.ok) throw new Error("请求失败");
+    const data = await res.json();
+    
+    if (data && data.data && data.data.quota !== undefined) {
+      s.balance = String(data.data.quota);
+      store.saveSites(state.sites);
+      renderList();
+      toast("余额已成功更新");
+    } else {
+      throw new Error("接口返回格式不支持");
+    }
+  } catch (err) {
+    console.error(err);
+    toast("拉取失败(可能跨域被拦截)，请去站点内手动查看并填写");
+  }
+}
 
 function openSiteForm(id) {
   const editing = id ? state.sites.find(x => x.id === id) : null;
@@ -233,13 +273,13 @@ function openSiteForm(id) {
     <div class="field"><label>标签（可多选）</label><div class="tag-picker" id="tagPicker">${tagPicker}</div></div>
     <div class="field"><label>备注</label><textarea id="f-note">${esc(s.note)}</textarea></div>
     <div class="field"><label>是否有签到</label><select id="f-hasCheckin"><option value="0" ${!s.hasCheckin ? "selected" : ""}>否</option><option value="1" ${s.hasCheckin ? "selected" : ""}>是</option></select></div>
-    <div class="field"><label>余额</label><input id="f-balance" value="${esc(s.balance)}" placeholder="可手填，如 12.5"></div>
+    <div class="field"><label>余额</label><input id="f-balance" value="${esc(s.balance)}" placeholder="可手填，也可以在主界面点刷新自动拉取"></div>
     <div class="field"><label>换算比例（多少 quota = 1 单位）</label><input id="f-quota" value="${esc(s.quotaPerUnit)}" placeholder="可选，如 500000"></div>
     <div class="field"><label>货币单位</label><select id="f-currency"><option value="" ${!s.currency ? "selected" : ""}>不换算</option><option value="USD" ${s.currency === "USD" ? "selected" : ""}>USD</option><option value="CNY" ${s.currency === "CNY" ? "selected" : ""}>CNY</option></select></div>
-    <div class="field"><label>API 端点（用于拉取模型价格）</label><input id="f-api" value="${esc(s.apiEndpoint)}" placeholder="https://xxx.com"></div>
+    <div class="field"><label>API 端点（用于拉取余额和模型价格）</label><input id="f-api" value="${esc(s.apiEndpoint)}" placeholder="https://xxx.com"></div>
     <div class="field"><label>人民币换算比例（比价时用）</label><input id="f-cnyRate" value="${esc(s.cnyRate)}" placeholder="比如 1 倍率=1.5元就填 1.5"></div>
-    <div class="field"><label>访问令牌（可选）</label><input id="f-token" value="${esc(s.accessToken)}" placeholder="系统访问令牌"></div>
-    <div class="field"><label>用户 ID（可选）</label><input id="f-uid" value="${esc(s.userId)}"></div>
+    <div class="field"><label>访问令牌（用于自动拉取余额）</label><input id="f-token" value="${esc(s.accessToken)}" placeholder="系统访问令牌，不是 sk-"></div>
+    <div class="field"><label>用户 ID（用于自动拉取余额）</label><input id="f-uid" value="${esc(s.userId)}"></div>
     <div class="btn-row"><button class="btn" id="btnCancel">取消</button><button class="btn primary" id="btnSave">保存</button></div>
   `);
   document.querySelectorAll("#tagPicker .chip").forEach(c => c.onclick = () => c.classList.toggle("active"));
@@ -319,7 +359,7 @@ document.getElementById("btnFetchPrices").onclick = async () => {
     try {
       const url = s.apiEndpoint.replace(/\/+$/, "") + "/api/pricing";
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5秒超时防跨域卡死
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
       const res = await fetch(url, { signal: controller.signal });
       clearTimeout(timeoutId);
       
@@ -329,7 +369,6 @@ document.getElementById("btnFetchPrices").onclick = async () => {
         if (Array.isArray(items)) {
           items.forEach(item => {
             const modelName = item.model_name || item.model || item.id;
-            // 兼容 New API 的倍率字段
             const rawRatio = item.model_ratio || item.ratio || item.input_price || item.price;
             if (modelName && rawRatio !== undefined) {
               const numRatio = parseFloat(rawRatio);
