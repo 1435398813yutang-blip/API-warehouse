@@ -40,7 +40,6 @@ const state = {
   search: "",
   regFilterGroup: "all",
   regFilterTags: [],
-  regSearch: "",
   regCollapsed: []
 };
 
@@ -165,11 +164,11 @@ function updateRegFilterUI() {
   const arrow = document.getElementById("regFilterArrow");
   if (state.settings.regFilterCollapsed) {
     content.style.display = "none";
-    title.textContent = "筛选与排序（点击展开）";
+    title.textContent = "筛选（点击展开）";
     arrow.style.transform = "rotate(-90deg)";
   } else {
     content.style.display = "block";
-    title.textContent = "筛选与排序（点击收起）";
+    title.textContent = "筛选（点击收起）";
     arrow.style.transform = "rotate(0deg)";
   }
 }
@@ -244,7 +243,7 @@ function renderList() {
   const wrap = document.getElementById("siteList");
   const all = getFilteredSites();
   if (!all.length) {
-    wrap.innerHTML = `<div class="empty">还没有站点<br>点右下角 + 添加，或从上方「收录站点」里一键添加</div>`;
+    wrap.innerHTML = `<div class="empty">没有匹配的站点</div>`;
     return;
   }
   const groups = [];
@@ -403,7 +402,7 @@ function openSiteForm(id) {
       </select>
     </div>
     <div class="field"><label>API 端点（可选）</label><input id="f-api" value="${esc(s.apiEndpoint)}" placeholder="https://xxx.com/v1"></div>
-    <div class="field"><label>访问令牌（可选，预览版不发起查询）</label><input id="f-token" value="${esc(s.accessToken)}" placeholder="系统访问令牌，不是 sk-"></div>
+    <div class="field"><label>访问令牌（可选）</label><input id="f-token" value="${esc(s.accessToken)}" placeholder="系统访问令牌，不是 sk-"></div>
     <div class="field"><label>用户 ID（可选）</label><input id="f-uid" value="${esc(s.userId)}"></div>
     <div class="btn-row">
       <button class="btn" id="btnCancel">取消</button>
@@ -490,16 +489,29 @@ function renderRegistry() {
   renderRegTagFilter();
 
   let list = (REGISTRY.sites || []).slice();
-  if (state.regSearch.trim()) {
-    const q = state.regSearch.trim().toLowerCase();
+  
+  // 使用全局 state.search 进行过滤
+  if (state.search.trim()) {
+    const q = state.search.trim().toLowerCase();
     list = list.filter(s =>
       (s.name || "").toLowerCase().includes(q) ||
       (s.note || "").toLowerCase().includes(q) ||
       (s.tags || []).some(t => t.toLowerCase().includes(q))
     );
   }
+  
   if (state.regFilterGroup !== "all") list = list.filter(s => s.group === state.regFilterGroup);
   if (state.regFilterTags.length) list = list.filter(s => state.regFilterTags.every(t => (s.tags || []).includes(t)));
+
+  // 更新按钮上的数字提示
+  const entryBtn = document.getElementById("btnRegistry");
+  if (!document.getElementById("registryPanel").hidden) {
+    entryBtn.textContent = "收起收录站点";
+  } else if (state.search.trim()) {
+    entryBtn.textContent = `收录站点（匹配 ${list.length} 个，点击展开）`;
+  } else {
+    entryBtn.textContent = "收录站点（点击展开）";
+  }
 
   const wrap = document.getElementById("regList");
   if (!list.length) {
@@ -709,7 +721,6 @@ function openSettings() {
   
   document.getElementById("s-wallValue").oninput = preview;
   
-  // 处理图片极限压缩上传
   document.getElementById("s-wallFile").onchange = e => {
     const file = e.target.files[0];
     if(!file) return;
@@ -720,7 +731,7 @@ function openSettings() {
       img.onload = () => {
         const canvas = document.createElement("canvas");
         const ctx = canvas.getContext("2d");
-        const MAX_DIMENSION = 1280; // 强制缩小尺寸
+        const MAX_DIMENSION = 1280;
         let width = img.width;
         let height = img.height;
 
@@ -739,7 +750,6 @@ function openSettings() {
         canvas.height = height;
         ctx.drawImage(img, 0, 0, width, height);
         
-        // 极限压缩：保证 Base64 长度在安全范围内（小于 300KB），不会撑爆浏览器
         let quality = 0.7;
         let dataUrl = canvas.toDataURL("image/jpeg", quality);
         
@@ -870,8 +880,16 @@ function bindEvents() {
     document.getElementById("searchInput").value = "";
     state.search = "";
     renderList();
+    renderRegistry();
   };
-  document.getElementById("searchInput").oninput = e => { state.search = e.target.value; renderList(); };
+  
+  // 搜索框输入时，同时刷新我的站点和收录站点的显示
+  document.getElementById("searchInput").oninput = e => { 
+    state.search = e.target.value; 
+    renderList(); 
+    renderRegistry(); 
+  };
+
   document.getElementById("btnSettings").onclick = openSettings;
   document.getElementById("btnAdd").onclick = () => openSiteForm(null);
   document.getElementById("sortSelect").value = state.settings.sortMode || "custom";
@@ -890,28 +908,25 @@ function bindEvents() {
     store.saveSettings(state.settings);
     updateRegFilterUI();
   };
+  
   const panel = document.getElementById("registryPanel");
   const entryBtn = document.getElementById("btnRegistry");
   entryBtn.onclick = () => {
     panel.hidden = !panel.hidden;
     if (panel.hidden) {
-      entryBtn.textContent = "收录站点（点击展开）";
       entryBtn.classList.remove("open");
     } else {
-      entryBtn.textContent = "收起收录站点";
       entryBtn.classList.add("open");
-      renderRegistry();
+      renderRegistry(); // 展开时触发渲染，顺便更新按钮文字
     }
   };
+  
   document.getElementById("regClose").onclick = () => {
     panel.hidden = true;
-    entryBtn.textContent = "收录站点（点击展开）";
     entryBtn.classList.remove("open");
+    renderRegistry(); // 收起时更新文字
   };
-  document.getElementById("regSearch").oninput = e => {
-    state.regSearch = e.target.value;
-    renderRegistry();
-  };
+  
   document.getElementById("modalMask").onclick = e => {
     if (e.target.id === "modalMask") closeModal();
   };
