@@ -326,7 +326,7 @@ function openSiteForm(id) {
     name: "", invite: "", group: state.settings.groups[0] || "付费站", 
     tags: [], note: "", hasCheckin: false, todayCheckedIn: false, lastCheckinDate: "", 
     balance: "", quotaPerUnit: "500000", currency: "CNY", 
-    apiEndpoint: "", siteType: "newapi", accessToken: "", userId: "", modelRatio: "0.002" 
+    apiEndpoint: "", siteType: "newapi", accessToken: "", userId: "", modelRatio: "1" 
   };
   const tagPicker = state.settings.tags.map(t => `<span class="chip ${(s.tags || []).includes(t) ? "active" : ""}" data-tag="${esc(t)}">${esc(t)}</span>`).join("");
   
@@ -355,7 +355,7 @@ function openSiteForm(id) {
     <div class="field"><label>余额</label><input id="f-balance" value="${esc(s.balance)}" placeholder="可手填，也可点刷新自动拉取"></div>
     <div class="field"><label>换算比例（1额度＝？quota）</label><input id="f-quota" value="${esc(s.quotaPerUnit)}" placeholder="默认 500000"></div>
     <div class="field"><label>货币单位</label><select id="f-currency"><option value="" ${!s.currency ? "selected" : ""}>不换算</option><option value="USD" ${s.currency === "USD" ? "selected" : ""}>USD</option><option value="CNY" ${s.currency === "CNY" ? "selected" : ""}>CNY</option></select></div>
-    <div class="field"><label>人民币换算比例（1额度＝？人民币）</label><input id="f-ratio" value="${esc(s.modelRatio)}" placeholder="默认 0.002"><div class="hint">用于模型比价时的价格折算</div></div>
+    <div class="field"><label>人民币换算比例（1额度＝？人民币）</label><input id="f-ratio" value="${esc(s.modelRatio)}" placeholder="默认 1"><div class="hint">用于模型比价时的价格折算</div></div>
 
     <div style="text-align:center; margin: 16px 0 10px;">
       <a href="javascript:void(0)" id="btnTutorialFromForm" style="color:var(--accent); font-size:13px; text-decoration:none;">👉 不知道怎么填？点此查看换算教程</a>
@@ -380,7 +380,7 @@ function openSiteForm(id) {
       quotaPerUnit: parseFloat(document.getElementById("f-quota").value) || 500000, 
       currency: document.getElementById("f-currency").value, 
       apiEndpoint: document.getElementById("f-api").value.trim(),
-      modelRatio: parseFloat(document.getElementById("f-ratio").value) || 0.002, 
+      modelRatio: parseFloat(document.getElementById("f-ratio").value) || 1, 
       accessToken: document.getElementById("f-token").value.trim(),
       siteType: document.getElementById("f-siteType").value,
       userId: document.getElementById("f-uid").value.trim(), sourceId: s.sourceId || null, createdAt: s.createdAt || new Date().toISOString(), lastOpenedAt: s.lastOpenedAt || ""
@@ -504,22 +504,17 @@ function renderModelList() {
     let html = `<div class="model-card" onclick="openModelDrawer('${m.siteId}')">
       <div class="model-info">
         <div class="model-name">${esc(m.modelName)}</div>
-        <div class="model-meta">${esc(m.siteName)}</div>`;
-        
-    if (m.priceType === "按量") {
-      html += `<div class="model-raw">接口原始: 输入 ${m.rawInput !== undefined ? m.rawInput : (m.rawPrice || '-')} / 输出 ${m.rawOutput !== undefined ? m.rawOutput : '-'}</div>`;
-    } else {
-      html += `<div class="model-raw">接口原始价格: ${m.rawInput !== undefined ? m.rawInput : (m.rawPrice || '-')}</div>`;
-    }
-    
-    html += `</div>
-      <div class="model-price">`;
+        <div class="model-meta">${esc(m.siteName)} | ${m.priceType}</div>
+      </div>
+      <div class="model-price" style="text-align:right;">`;
       
     if (m.priceType === "按量") {
-      html += `输入: ￥${(m.cnyInput || m.cnyPrice || 0).toFixed(4)} / 1M<br>
-              输出: ￥${(m.cnyOutput || 0).toFixed(4)} / 1M`;
+      html += `输入: ￥${(m.cnyInput || 0).toFixed(4)} / 1M<br>
+              输出: ￥${(m.cnyOutput || 0).toFixed(4)} / 1M<br>
+              <span style="font-size:11px;color:#999;font-weight:normal;">(额度: ${m.rawInput.toFixed(2)} / ${m.rawOutput.toFixed(2)})</span>`;
     } else {
-      html += `￥${(m.cnyInput || m.cnyPrice || 0).toFixed(4)}<span>/ 次</span>`;
+      html += `￥${(m.cnyInput || 0).toFixed(4)} / 次<br>
+              <span style="font-size:11px;color:#999;font-weight:normal;">(额度: ${m.rawInput})</span>`;
     }
     
     html += `</div></div>`;
@@ -570,34 +565,37 @@ document.getElementById("btnFetchPrices").onclick = async () => {
             const modelName = item.model_name || item.model || item.id;
             if(!modelName) return;
 
-            const mRatio = item.model_ratio || item.ratio;
-            const cRatio = item.completion_ratio || mRatio;
-            const mPrice = item.model_price || item.price;
+            const mRatio = parseFloat(item.model_ratio || item.ratio) || 0;
+            const cRatio = parseFloat(item.completion_ratio) || mRatio;
+            const mPrice = parseFloat(item.model_price || item.price);
             
-            const rate = s.modelRatio || 0.002;
+            const rate = s.modelRatio || 1;
 
-            if (mRatio !== undefined) {
-              const rawIn = parseFloat(mRatio) || 0;
-              const rawOut = parseFloat(cRatio) || 0;
+            if (mRatio > 0) {
+              // 按量计算
+              const rawIn = mRatio * 2; // 算出官网的 150
+              const rawOut = rawIn * cRatio; // 算出官网的 425
+              const cnyInput = rawIn * rate;
+              const cnyOutput = rawOut * rate; 
               newPrices.push({
                 siteId: s.id, siteName: s.name, modelName: modelName,
                 priceType: "按量",
                 rawInput: rawIn,
                 rawOutput: rawOut,
-                cnyInput: rawIn * rate * 1000,
-                cnyOutput: rawOut * rate * 1000,
-                cnyPrice: rawIn * rate * 1000 
+                cnyInput: cnyInput,
+                cnyOutput: cnyOutput,
+                cnyPrice: cnyInput 
               });
-            } else if (mPrice !== undefined) {
-              const rawPrice = parseFloat(mPrice) || 0;
+            } else if (!isNaN(mPrice)) {
+              // 按次计算
               newPrices.push({
                 siteId: s.id, siteName: s.name, modelName: modelName,
                 priceType: "按次",
-                rawInput: rawPrice,
+                rawInput: mPrice,
                 rawOutput: 0,
-                cnyInput: rawPrice * rate,
+                cnyInput: mPrice,
                 cnyOutput: 0,
-                cnyPrice: rawPrice * rate
+                cnyPrice: mPrice
               });
             }
           });
@@ -640,7 +638,7 @@ function renderRegistry() {
   wrap.querySelectorAll("[data-add]").forEach(btn => { btn.onclick = () => addFromRegistry(btn.dataset.add); });
 }
 function regCardHTML(s) { const added = state.sites.some(x => x.sourceId === s.id); const tags = (s.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join(""); return `<div class="reg-card"><div class="reg-top"><div class="reg-name">${(s.tags||[]).includes("常用") ? '<span style="color:var(--accent);margin-right:4px;font-size:15px">☆</span>' : ''}${esc(s.name)}</div><button class="mini-btn ${added ? "done" : ""}" data-add="${esc(s.id)}" ${added ? "disabled" : ""}>${added ? "已添加" : "添加"}</button></div><div class="card-tags">${tags}</div><div class="reg-note">${esc(s.group)}｜${linkify(s.note || "")}</div></div>`; }
-function addFromRegistry(rid) { const r = REGISTRY.sites.find(s => s.id === rid); if (!r) return; if (state.sites.some(x => x.sourceId === r.id)) { toast("已经添加过了"); return; } let host = ""; try { host = new URL(r.invite).origin; } catch {} const obj = { id: uid(), name: r.name, invite: r.invite, group: r.group, tags: [...(r.tags || [])], note: r.note || "", hasCheckin: ["有签到", "限制签到"].includes(r.group), todayCheckedIn: false, lastCheckinDate: "", balance: "", quotaPerUnit: "500000", currency: "CNY", apiEndpoint: host ? host : "", siteType: "newapi", modelRatio: "0.002", accessToken: "", userId: "", sourceId: r.id, createdAt: new Date().toISOString(), lastOpenedAt: "" }; state.sites.push(obj); store.saveSites(state.sites); renderList(); renderRegistry(); toast(`已添加「${r.name}」`); }
+function addFromRegistry(rid) { const r = REGISTRY.sites.find(s => s.id === rid); if (!r) return; if (state.sites.some(x => x.sourceId === r.id)) { toast("已经添加过了"); return; } let host = ""; try { host = new URL(r.invite).origin; } catch {} const obj = { id: uid(), name: r.name, invite: r.invite, group: r.group, tags: [...(r.tags || [])], note: r.note || "", hasCheckin: ["有签到", "限制签到"].includes(r.group), todayCheckedIn: false, lastCheckinDate: "", balance: "", quotaPerUnit: "500000", currency: "CNY", apiEndpoint: host ? host : "", siteType: "newapi", modelRatio: "1", accessToken: "", userId: "", sourceId: r.id, createdAt: new Date().toISOString(), lastOpenedAt: "" }; state.sites.push(obj); store.saveSites(state.sites); renderList(); renderRegistry(); toast(`已添加「${r.name}」`); }
 
 function openSettings() {
   const s = state.settings; const w = s.wallpaper || { type: "none", value: "", opacity: 0.82 }; const presetColors = ["#e8e4dd","#d4d9d6","#cfd6dc","#e3d8d2","#dcd8d0","#d9d5d0"];
