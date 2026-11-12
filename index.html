@@ -123,5 +123,19 @@
 <div class="toast" id="toast"></div>
 
 <script src="js/app.js"></script>
+<script>
+  // 注册 PWA Service Worker
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('./sw.js')
+        .then(registration => {
+          console.log('PWA Service Worker 注册成功:', registration.scope);
+        })
+        .catch(error => {
+          console.log('PWA Service Worker 注册失败:', error);
+        });
+    });
+  }
+</script>
 </body>
 </html>
