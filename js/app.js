@@ -573,8 +573,8 @@ document.getElementById("btnFetchPrices").onclick = async () => {
 
             if (mRatio > 0) {
               // 按量计算
-              const rawIn = mRatio * 2; // 算出官网的 150
-              const rawOut = rawIn * cRatio; // 算出官网的 425
+              const rawIn = mRatio * 2; 
+              const rawOut = rawIn * cRatio; 
               const cnyInput = rawIn * rate;
               const cnyOutput = rawOut * rate; 
               newPrices.push({
@@ -587,15 +587,16 @@ document.getElementById("btnFetchPrices").onclick = async () => {
                 cnyPrice: cnyInput 
               });
             } else if (!isNaN(mPrice)) {
-              // 按次计算
+              // 按次计算（修复：补上乘以汇率 rate）
+              const cnyPrice = mPrice * rate;
               newPrices.push({
                 siteId: s.id, siteName: s.name, modelName: modelName,
                 priceType: "按次",
                 rawInput: mPrice,
                 rawOutput: 0,
-                cnyInput: mPrice,
+                cnyInput: cnyPrice,
                 cnyOutput: 0,
-                cnyPrice: mPrice
+                cnyPrice: cnyPrice
               });
             }
           });
