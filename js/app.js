@@ -46,6 +46,7 @@ const state = {
   modelSearch: "",
   providerFilter: [],
   priceTypeFilter: [],
+  siteFilter: [], // 新增：按站点筛选
   regFilterGroup: "all",
   regFilterTags: [],
   regCollapsed: []
@@ -407,7 +408,7 @@ function renderProviderFilter() {
 }
 
 function renderPriceTypeFilter() {
-  const types = ["全部", "倍率", "单价"];
+  const types = ["全部", "按次", "按量"];
   const wrap = document.getElementById("priceTypeFilter");
   wrap.innerHTML = types.map(t => `<span class="chip ${state.priceTypeFilter.includes(t) || (t==="全部" && state.priceTypeFilter.length===0) ? "active" : ""}" data-t="${t}">${t}</span>`).join("");
   wrap.querySelectorAll(".chip").forEach(c => {
@@ -423,11 +424,41 @@ function renderPriceTypeFilter() {
   });
 }
 
+function renderSiteFilter() {
+  // 获取所有有价格数据的来源站点
+  const siteNames = [...new Set(state.modelPrices.map(m => m.siteName))];
+  const wrap = document.getElementById("siteFilter");
+  
+  if (siteNames.length === 0) {
+    wrap.innerHTML = `<div style="font-size:12px;color:#999;">暂无站点数据</div>`;
+    return;
+  }
+
+  const chips = [`<span class="chip ${state.siteFilter.length === 0 ? "active" : ""}" data-s="all">全选</span>`];
+  siteNames.forEach(s => {
+    chips.push(`<span class="chip ${state.siteFilter.includes(s) ? "active" : ""}" data-s="${esc(s)}">${esc(s)}</span>`);
+  });
+  
+  wrap.innerHTML = chips.join("");
+  wrap.querySelectorAll(".chip").forEach(c => {
+    c.onclick = () => {
+      const s = c.dataset.s;
+      if (s === "all") state.siteFilter = [];
+      else {
+        const idx = state.siteFilter.indexOf(s);
+        if (idx >= 0) state.siteFilter.splice(idx, 1); else state.siteFilter.push(s);
+      }
+      renderSiteFilter(); renderModelList();
+    };
+  });
+}
+
 function renderModelList() {
   const wrap = document.getElementById("modelList");
   if (!wrap) return;
   renderProviderFilter();
   renderPriceTypeFilter();
+  renderSiteFilter();
 
   let list = state.modelPrices.slice();
   
@@ -440,6 +471,10 @@ function renderModelList() {
     list = list.filter(m => state.providerFilter.includes(getProvider(m.modelName)));
   }
   
+  if (state.siteFilter.length) {
+    list = list.filter(m => state.siteFilter.includes(m.siteName));
+  }
+
   if (state.priceTypeFilter.length) {
     list = list.filter(m => state.priceTypeFilter.includes(m.priceType));
   }
@@ -450,11 +485,12 @@ function renderModelList() {
     wrap.innerHTML = `<div class="empty">暂无数据<br>点击右上角「更新价格」拉取，或更改筛选条件。</div>`;
     return;
   }
+  
   wrap.innerHTML = list.map(m => `
     <div class="model-card" onclick="openModelDrawer('${m.siteId}')">
       <div class="model-info">
         <div class="model-name">${esc(m.modelName)}</div>
-        <div class="model-meta">${esc(m.siteName)} ${m.priceType === "倍率" ? `(倍率: ${m.rawPrice})` : ""}</div>
+        <div class="model-meta">${esc(m.siteName)} ${m.priceType === "按量" ? `(倍率: ${m.rawPrice})` : ""}</div>
       </div>
       <div class="model-price">￥${m.cnyPrice.toFixed(4)}<span>${m.unit}</span></div>
     </div>
@@ -507,10 +543,12 @@ document.getElementById("btnFetchPrices").onclick = async () => {
               const numRatio = parseFloat(rawRatio);
               if (!isNaN(numRatio)) {
                 const ratio = s.modelRatio || 0.002;
+                const isByRequest = !item.model_ratio; // 没有model_ratio字段则认为是按次计费
                 newPrices.push({
                   siteId: s.id, siteName: s.name, modelName: modelName,
-                  rawPrice: rawRatio, priceType: item.model_ratio ? "倍率" : "单价",
-                  cnyPrice: numRatio * ratio, unit: item.model_ratio ? "元 (倍率折合)" : "元/次或百万"
+                  rawPrice: rawRatio, priceType: isByRequest ? "按次" : "按量",
+                  cnyPrice: numRatio * ratio, 
+                  unit: isByRequest ? "元 / 次" : "元 / 百万 Token"
                 });
               }
             }
@@ -685,9 +723,22 @@ function bindEvents() {
   document.querySelectorAll(".nav-item").forEach(n => n.onclick = () => switchTab(n.dataset.tab));
   document.getElementById("btnNotice").onclick = () => {
     let html = `<h3>公告</h3><div class="notice-contact"><b>联系作者</b><br>邮箱：${esc(REGISTRY.contact?.email || "")}<br>QQ：${esc(REGISTRY.contact?.qq || "")}</div>`;
-    const notices = (REGISTRY.notice || []).slice().reverse();
+    
+    // 排序：置顶优先，然后按日期倒序
+    let notices = (REGISTRY.notice || []).slice();
+    notices.sort((a, b) => {
+      const pinA = a.isPinned ? 1 : 0;
+      const pinB = b.isPinned ? 1 : 0;
+      if (pinA !== pinB) return pinB - pinA;
+      return (b.date || "").localeCompare(a.date || "");
+    });
+    
     if (notices.length === 0) html += `<div class="empty" style="padding:20px;">暂无公告</div>`;
-    else notices.forEach(n => { html += `<div class="notice-card"><div class="notice-header"><span class="notice-title">${esc(n.title)}</span><span class="notice-date">${esc(n.date)}</span></div><div class="notice-content">${linkify(n.content)}</div></div>`; });
+    else notices.forEach(n => { 
+      const pinHtml = n.isPinned ? '<span style="background:var(--danger);color:#fff;font-size:10px;padding:2px 4px;border-radius:4px;margin-right:6px;">置顶</span>' : '';
+      html += `<div class="notice-card"><div class="notice-header"><span class="notice-title">${pinHtml}${esc(n.title)}</span><span class="notice-date">${esc(n.date)}</span></div><div class="notice-content">${linkify(n.content)}</div></div>`; 
+    });
+    
     html += `<div class="btn-row"><button class="btn" id="btnCloseNotice">关闭</button></div>`;
     showModal(html); document.getElementById("btnCloseNotice").onclick = closeModal;
   };
