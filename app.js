@@ -1,0 +1,836 @@
+/* ============ 本地存储 ============ */
+const KEY_SITES = "axc_sites_v1";
+const KEY_SETTINGS = "axc_settings_v1";
+let REGISTRY = { notice: [], contact: {}, presetGroups: [], presetTags: [], sites: [] };
+
+function defaultSettings() {
+  return {
+    theme: "morandi",
+    wallpaper: { type: "none", value: "", opacity: 0.82 },
+    appName: "API小仓库",
+    groups: ["付费站", "公益站", "有签到", "限制签到", "生图站"],
+    tags: ["试吃", "无试吃", "试吃不确定", "需邀请码", "关闭注册", "生图", "视频", "音频", "抗截断", "常用"],
+    sortMode: "custom",
+    collapsedGroups: [],
+    filterCollapsed: true,
+    regFilterCollapsed: true
+  };
+}
+
+const store = {
+  getSites() {
+    try { return JSON.parse(localStorage.getItem(KEY_SITES) || "[]"); } catch { return []; }
+  },
+  saveSites(sites) { localStorage.setItem(KEY_SITES, JSON.stringify(sites)); },
+  getSettings() {
+    try {
+      const s = JSON.parse(localStorage.getItem(KEY_SETTINGS) || "null");
+      if (!s) return defaultSettings();
+      return Object.assign(defaultSettings(), s);
+    } catch { return defaultSettings(); }
+  },
+  saveSettings(s) { localStorage.setItem(KEY_SETTINGS, JSON.stringify(s)); }
+};
+
+const state = {
+  sites: [],
+  settings: defaultSettings(),
+  filterGroup: "all",
+  filterTags: [],
+  search: "",
+  regFilterGroup: "all",
+  regFilterTags: [],
+  regSearch: "",
+  regCollapsed: []
+};
+
+function uid() {
+  return "s_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+}
+function todayStr() {
+  const d = new Date();
+  const p = n => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+function esc(s) {
+  return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({
+    "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+  }[c]));
+}
+function linkify(text) {
+  if (!text) return "";
+  const urlRe = /(https?:\/\/[a-zA-Z0-9\-\._~:\/\?#\[\]@!$&'()*+,;=%]+)/g;
+  let result = "";
+  let lastIndex = 0;
+  let m;
+  while ((m = urlRe.exec(text)) !== null) {
+    result += esc(text.slice(lastIndex, m.index));
+    let url = m[1];
+    let trailing = "";
+    while (/[.,;:!?)]$/.test(url)) {
+      if (/[.,;:!?]$/.test(url) || (url.endsWith(")") && !url.includes("("))) {
+        trailing = url.slice(-1) + trailing;
+        url = url.slice(0, -1);
+      } else {
+        break;
+      }
+    }
+    result += `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(url)}</a>`;
+    result += esc(trailing);
+    lastIndex = m.index + m[1].length;
+  }
+  result += esc(text.slice(lastIndex));
+  return result;
+}
+
+async function init() {
+  // 拉取外置 JSON 数据
+  try {
+    const res = await fetch('./registry.json');
+    if (res.ok) {
+      REGISTRY = await res.json();
+      const s = store.getSettings();
+      // 如果用户第一次打开，用 registry 里的预设初始化
+      if (!localStorage.getItem(KEY_SETTINGS)) {
+        if (REGISTRY.presetGroups && REGISTRY.presetGroups.length) s.groups = [...REGISTRY.presetGroups];
+        if (REGISTRY.presetTags && REGISTRY.presetTags.length) s.tags = [...REGISTRY.presetTags];
+        store.saveSettings(s);
+      }
+    }
+  } catch (err) {
+    console.warn("无法读取 registry.json，使用本地空数据", err);
+  }
+
+  state.settings = store.getSettings();
+  state.sites = store.getSites();
+
+  const today = todayStr();
+  let changed = false;
+  state.sites.forEach(s => {
+    if (s.todayCheckedIn && s.lastCheckinDate !== today) {
+      s.todayCheckedIn = false;
+      changed = true;
+    }
+  });
+  if (changed) store.saveSites(state.sites);
+
+  applyTheme();
+  applyWallpaper();
+  renderGroupFilter();
+  renderTagFilter();
+  renderList();
+  renderRegistry();
+  updateFilterUI();
+  updateRegFilterUI();
+  bindEvents();
+}
+
+function applyTheme() {
+  document.documentElement.setAttribute("data-theme", state.settings.theme === "mono" ? "mono" : "morandi");
+}
+function applyWallpaper() {
+  const w = state.settings.wallpaper || { type: "none", value: "", opacity: 0.82 };
+  const el = document.getElementById("wallpaper");
+  let css = "transparent";
+  if (w.type === "color" && w.value) css = w.value;
+  else if (w.type === "gradient" && w.value) css = w.value;
+  else if (w.type === "image" && w.value) css = `url("${w.value}") center/cover no-repeat`;
+  el.style.background = css;
+  document.documentElement.style.setProperty("--card-opacity", String(w.opacity || 0.82));
+  const name = state.settings.appName || "API小仓库";
+  document.getElementById("appName").textContent = name;
+  document.title = name;
+}
+
+function updateFilterUI() {
+  const content = document.getElementById("filterContent");
+  const title = document.getElementById("filterTitle");
+  const arrow = document.getElementById("filterArrow");
+  if (state.settings.filterCollapsed) {
+    content.style.display = "none";
+    title.textContent = "筛选与排序（点击展开）";
+    arrow.style.transform = "rotate(-90deg)";
+  } else {
+    content.style.display = "block";
+    title.textContent = "筛选与排序（点击收起）";
+    arrow.style.transform = "rotate(0deg)";
+  }
+}
+
+function updateRegFilterUI() {
+  const content = document.getElementById("regFilterContent");
+  const title = document.getElementById("regFilterTitle");
+  const arrow = document.getElementById("regFilterArrow");
+  if (state.settings.regFilterCollapsed) {
+    content.style.display = "none";
+    title.textContent = "筛选与排序（点击展开）";
+    arrow.style.transform = "rotate(-90deg)";
+  } else {
+    content.style.display = "block";
+    title.textContent = "筛选与排序（点击收起）";
+    arrow.style.transform = "rotate(0deg)";
+  }
+}
+
+function renderGroupFilter() {
+  const wrap = document.getElementById("groupFilter");
+  const groups = state.settings.groups;
+  const chips = [`<span class="chip ${state.filterGroup === "all" ? "active" : ""}" data-group="all">全部</span>`];
+  groups.forEach(g => {
+    chips.push(`<span class="chip ${state.filterGroup === g ? "active" : ""}" data-group="${esc(g)}">${esc(g)}</span>`);
+  });
+  wrap.innerHTML = chips.join("");
+  wrap.querySelectorAll(".chip").forEach(c => {
+    c.onclick = () => {
+      state.filterGroup = c.dataset.group;
+      renderGroupFilter();
+      renderList();
+    };
+  });
+}
+function renderTagFilter() {
+  const wrap = document.getElementById("tagFilter");
+  wrap.innerHTML = state.settings.tags.map(t =>
+    `<span class="chip ${state.filterTags.includes(t) ? "active" : ""}" data-tag="${esc(t)}">${esc(t)}</span>`
+  ).join("");
+  wrap.querySelectorAll(".chip").forEach(c => {
+    c.onclick = () => {
+      const t = c.dataset.tag;
+      const i = state.filterTags.indexOf(t);
+      if (i >= 0) state.filterTags.splice(i, 1);
+      else state.filterTags.push(t);
+      renderTagFilter();
+      renderList();
+    };
+  });
+}
+
+function getFilteredSites() {
+  let arr = state.sites.slice();
+  if (state.search.trim()) {
+    const q = state.search.trim().toLowerCase();
+    arr = arr.filter(s =>
+      (s.name || "").toLowerCase().includes(q) ||
+      (s.note || "").toLowerCase().includes(q) ||
+      (s.invite || "").toLowerCase().includes(q) ||
+      (s.group || "").toLowerCase().includes(q) ||
+      (s.tags || []).some(t => t.toLowerCase().includes(q))
+    );
+  }
+  if (state.filterGroup !== "all") arr = arr.filter(s => s.group === state.filterGroup);
+  if (state.filterTags.length) arr = arr.filter(s => state.filterTags.every(t => (s.tags || []).includes(t)));
+  return arr;
+}
+function sortSites(arr) {
+  const mode = state.settings.sortMode || "custom";
+  const byCommon = (a, b) => {
+    const ca = (a.tags || []).includes("常用") ? 1 : 0;
+    const cb = (b.tags || []).includes("常用") ? 1 : 0;
+    return cb - ca;
+  };
+  const num = v => { const n = parseFloat(v); return isNaN(n) ? -Infinity : n; };
+  const sorted = arr.slice();
+  if (mode === "name-asc") sorted.sort((a, b) => (a.name || "").localeCompare(b.name || "", "zh"));
+  else if (mode === "name-desc") sorted.sort((a, b) => (b.name || "").localeCompare(a.name || "", "zh"));
+  else if (mode === "balance-desc") sorted.sort((a, b) => num(b.balance) - num(a.balance));
+  else if (mode === "balance-asc") sorted.sort((a, b) => num(a.balance) - num(b.balance));
+  else if (mode === "recent") sorted.sort((a, b) => (b.lastOpenedAt || "").localeCompare(a.lastOpenedAt || ""));
+  else sorted.sort(byCommon);
+  return sorted;
+}
+function renderList() {
+  const wrap = document.getElementById("siteList");
+  const all = getFilteredSites();
+  if (!all.length) {
+    wrap.innerHTML = `<div class="empty">还没有站点<br>点右下角 + 添加，或从上方「收录站点」里一键添加</div>`;
+    return;
+  }
+  const groups = [];
+  state.settings.groups.forEach(g => groups.push(g));
+  all.forEach(s => { if (s.group && !groups.includes(s.group)) groups.push(s.group); });
+
+  const html = [];
+  groups.forEach(g => {
+    const items = sortSites(all.filter(s => s.group === g));
+    if (!items.length) return;
+    const collapsed = (state.settings.collapsedGroups || []).includes(g);
+    html.push(`<section class="group ${collapsed ? "collapsed" : ""}" data-group="${esc(g)}">
+      <div class="group-head">
+        <span class="arrow">▼</span>
+        <span class="gname">${esc(g)}</span>
+        <span class="gcount">${items.length}</span>
+      </div>
+      <div class="group-body">${items.map(cardHTML).join("")}</div>
+    </section>`);
+  });
+  wrap.innerHTML = html.join("");
+
+  wrap.querySelectorAll(".group-head").forEach(h => {
+    h.onclick = () => {
+      const sec = h.parentElement;
+      const g = sec.dataset.group;
+      sec.classList.toggle("collapsed");
+      const set = new Set(state.settings.collapsedGroups || []);
+      if (sec.classList.contains("collapsed")) set.add(g); else set.delete(g);
+      state.settings.collapsedGroups = [...set];
+      store.saveSettings(state.settings);
+    };
+  });
+  wrap.querySelectorAll(".card").forEach(card => {
+    const id = card.dataset.id;
+    card.querySelector('[data-act="open"]')?.addEventListener("click", () => openSite(id));
+    card.querySelector('[data-act="checkin"]')?.addEventListener("click", () => toggleCheckin(id));
+    card.querySelector('[data-act="copy"]')?.addEventListener("click", () => copyInvite(id));
+    card.querySelector('[data-act="edit"]')?.addEventListener("click", () => openSiteForm(id));
+    card.querySelector('[data-act="delete"]')?.addEventListener("click", () => deleteSite(id));
+  });
+}
+function balanceText(s) {
+  if (!s.balance) return "";
+  let extra = "";
+  if (s.quotaPerUnit && s.currency) {
+    const n = parseFloat(s.balance);
+    if (!isNaN(n) && s.quotaPerUnit > 0) {
+      extra = `（约 ${(n / s.quotaPerUnit).toFixed(2)} ${s.currency}）`;
+    }
+  }
+  return `<span class="balance">余额 <b>${esc(s.balance)}</b>${esc(extra)}</span>`;
+}
+function cardHTML(s) {
+  const tags = (s.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join("");
+  const checkinBtn = s.hasCheckin
+    ? `<button class="mini-btn ${s.todayCheckedIn ? "done" : ""}" data-act="checkin">${s.todayCheckedIn ? "今日已签" : "标记签到"}</button>`
+    : "";
+  return `<div class="card ${(s.tags || []).includes("常用") ? "pinned" : ""}" data-id="${esc(s.id)}">
+    <div class="card-top">
+      <div class="card-name">${(s.tags || []).includes("常用") ? '<span class="pin">☆</span>' : ""}${esc(s.name)}</div>
+      <div class="card-actions">
+        ${checkinBtn}
+        <button class="mini-btn" data-act="copy">复制</button>
+        <button class="mini-btn" data-act="open">打开</button>
+      </div>
+    </div>
+    <div class="card-meta">
+      <span>${esc(s.group || "")}</span>
+      ${balanceText(s)}
+    </div>
+    ${tags ? `<div class="card-tags">${tags}</div>` : ""}
+    ${s.note ? `<div class="card-note">${linkify(s.note)}</div>` : ""}
+    <div class="card-meta" style="margin-top:8px;gap:6px">
+      <button class="mini-btn" data-act="edit">编辑</button>
+      <button class="mini-btn danger" data-act="delete">删除</button>
+    </div>
+  </div>`;
+}
+
+function openSite(id) {
+  const s = state.sites.find(x => x.id === id);
+  if (!s) return;
+  s.lastOpenedAt = new Date().toISOString();
+  store.saveSites(state.sites);
+  window.open(s.invite || s.mainUrl, "_blank");
+}
+function toggleCheckin(id) {
+  const s = state.sites.find(x => x.id === id);
+  if (!s) return;
+  s.todayCheckedIn = !s.todayCheckedIn;
+  if (s.todayCheckedIn) s.lastCheckinDate = todayStr();
+  store.saveSites(state.sites);
+  renderList();
+  toast(s.todayCheckedIn ? "已标记今日签到" : "已取消签到标记");
+}
+function copyInvite(id) {
+  const s = state.sites.find(x => x.id === id);
+  if (!s) return;
+  const text = s.invite || s.mainUrl || "";
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(text).then(() => toast("已复制链接")).catch(() => fallbackCopy(text));
+  } else fallbackCopy(text);
+}
+function fallbackCopy(text) {
+  const ta = document.createElement("textarea");
+  ta.value = text; document.body.appendChild(ta); ta.select();
+  try { document.execCommand("copy"); toast("已复制链接"); } catch { toast("复制失败"); }
+  document.body.removeChild(ta);
+}
+function deleteSite(id) {
+  const s = state.sites.find(x => x.id === id);
+  if (!s) return;
+  if (!confirm(`确定删除「${s.name}」？`)) return;
+  state.sites = state.sites.filter(x => x.id !== id);
+  store.saveSites(state.sites);
+  renderList();
+  toast("已删除");
+}
+
+function openSiteForm(id) {
+  const editing = id ? state.sites.find(x => x.id === id) : null;
+  const s = editing || {
+    name: "", invite: "", group: state.settings.groups[0] || "付费站",
+    tags: [], note: "", hasCheckin: false, todayCheckedIn: false,
+    lastCheckinDate: "", balance: "", quotaPerUnit: "", currency: "",
+    apiEndpoint: "", accessToken: "", userId: ""
+  };
+  const tagPicker = state.settings.tags.map(t =>
+    `<span class="chip ${(s.tags || []).includes(t) ? "active" : ""}" data-tag="${esc(t)}">${esc(t)}</span>`
+  ).join("");
+
+  showModal(`
+    <h3>${editing ? "编辑站点" : "添加站点"}</h3>
+    <div class="field"><label>站名 *</label><input id="f-name" value="${esc(s.name)}"></div>
+    <div class="field"><label>链接 *</label><input id="f-invite" value="${esc(s.invite)}" placeholder="比如签到页或注册链接"></div>
+    <div class="field"><label>分组</label>
+      <input id="f-group" value="${esc(s.group)}" list="groupList">
+      <datalist id="groupList">${state.settings.groups.map(g => `<option value="${esc(g)}">`).join("")}</datalist>
+    </div>
+    <div class="field"><label>标签（可多选）</label><div class="tag-picker" id="tagPicker">${tagPicker}</div></div>
+    <div class="field"><label>备注</label><textarea id="f-note" placeholder="比如 QQ 群、试吃说明、补空回地址">${esc(s.note)}</textarea></div>
+    <div class="field"><label>是否有签到</label>
+      <select id="f-hasCheckin">
+        <option value="0" ${!s.hasCheckin ? "selected" : ""}>否</option>
+        <option value="1" ${s.hasCheckin ? "selected" : ""}>是</option>
+      </select>
+    </div>
+    <div class="field"><label>余额</label><input id="f-balance" value="${esc(s.balance)}" placeholder="可手填，如 12.5"></div>
+    <div class="field"><label>换算比例（多少 quota = 1 单位）</label><input id="f-quota" value="${esc(s.quotaPerUnit)}" placeholder="可选，如 500000"></div>
+    <div class="field"><label>货币单位</label>
+      <select id="f-currency">
+        <option value="" ${!s.currency ? "selected" : ""}>不换算</option>
+        <option value="USD" ${s.currency === "USD" ? "selected" : ""}>USD</option>
+        <option value="CNY" ${s.currency === "CNY" ? "selected" : ""}>CNY</option>
+      </select>
+    </div>
+    <div class="field"><label>API 端点（可选）</label><input id="f-api" value="${esc(s.apiEndpoint)}" placeholder="https://xxx.com/v1"></div>
+    <div class="field"><label>访问令牌（可选，预览版不发起查询）</label><input id="f-token" value="${esc(s.accessToken)}" placeholder="系统访问令牌，不是 sk-"></div>
+    <div class="field"><label>用户 ID（可选）</label><input id="f-uid" value="${esc(s.userId)}"></div>
+    <div class="btn-row">
+      <button class="btn" id="btnCancel">取消</button>
+      <button class="btn primary" id="btnSave">保存</button>
+    </div>
+  `);
+
+  document.querySelectorAll("#tagPicker .chip").forEach(c => {
+    c.onclick = () => c.classList.toggle("active");
+  });
+  document.getElementById("btnCancel").onclick = closeModal;
+  document.getElementById("btnSave").onclick = () => {
+    const name = document.getElementById("f-name").value.trim();
+    const invite = document.getElementById("f-invite").value.trim();
+    if (!name || !invite) { toast("站名和链接必填"); return; }
+    const tags = [...document.querySelectorAll("#tagPicker .chip.active")].map(c => c.dataset.tag);
+    const obj = {
+      id: s.id || uid(),
+      name, invite,
+      group: document.getElementById("f-group").value.trim() || "其他",
+      tags,
+      note: document.getElementById("f-note").value.trim(),
+      hasCheckin: document.getElementById("f-hasCheckin").value === "1",
+      todayCheckedIn: s.todayCheckedIn || false,
+      lastCheckinDate: s.lastCheckinDate || "",
+      balance: document.getElementById("f-balance").value.trim(),
+      quotaPerUnit: parseFloat(document.getElementById("f-quota").value) || "",
+      currency: document.getElementById("f-currency").value,
+      apiEndpoint: document.getElementById("f-api").value.trim(),
+      accessToken: document.getElementById("f-token").value.trim(),
+      userId: document.getElementById("f-uid").value.trim(),
+      sourceId: s.sourceId || null,
+      createdAt: s.createdAt || new Date().toISOString(),
+      lastOpenedAt: s.lastOpenedAt || ""
+    };
+    if (editing) state.sites = state.sites.map(x => x.id === obj.id ? obj : x);
+    else state.sites.push(obj);
+    store.saveSites(state.sites);
+    closeModal();
+    renderList();
+    renderRegistry();
+    toast(editing ? "已保存" : "已添加");
+  };
+}
+
+function renderRegGroupFilter() {
+  const wrap = document.getElementById("regGroupFilter");
+  if(!wrap) return;
+  const groups = REGISTRY.presetGroups || [];
+  const chips = [`<span class="chip ${state.regFilterGroup === "all" ? "active" : ""}" data-group="all">全部</span>`];
+  groups.forEach(g => {
+    chips.push(`<span class="chip ${state.regFilterGroup === g ? "active" : ""}" data-group="${esc(g)}">${esc(g)}</span>`);
+  });
+  wrap.innerHTML = chips.join("");
+  wrap.querySelectorAll(".chip").forEach(c => {
+    c.onclick = () => {
+      state.regFilterGroup = c.dataset.group;
+      renderRegGroupFilter();
+      renderRegistry();
+    };
+  });
+}
+function renderRegTagFilter() {
+  const wrap = document.getElementById("regTagFilter");
+  if(!wrap) return;
+  const tags = REGISTRY.presetTags || [];
+  wrap.innerHTML = tags.map(t =>
+    `<span class="chip ${state.regFilterTags.includes(t) ? "active" : ""}" data-tag="${esc(t)}">${esc(t)}</span>`
+  ).join("");
+  wrap.querySelectorAll(".chip").forEach(c => {
+    c.onclick = () => {
+      const t = c.dataset.tag;
+      const i = state.regFilterTags.indexOf(t);
+      if (i >= 0) state.regFilterTags.splice(i, 1);
+      else state.regFilterTags.push(t);
+      renderRegTagFilter();
+      renderRegistry();
+    };
+  });
+}
+function renderRegistry() {
+  if(!document.getElementById("regList")) return;
+  renderRegGroupFilter();
+  renderRegTagFilter();
+
+  let list = (REGISTRY.sites || []).slice();
+  if (state.regSearch.trim()) {
+    const q = state.regSearch.trim().toLowerCase();
+    list = list.filter(s =>
+      (s.name || "").toLowerCase().includes(q) ||
+      (s.note || "").toLowerCase().includes(q) ||
+      (s.tags || []).some(t => t.toLowerCase().includes(q))
+    );
+  }
+  if (state.regFilterGroup !== "all") list = list.filter(s => s.group === state.regFilterGroup);
+  if (state.regFilterTags.length) list = list.filter(s => state.regFilterTags.every(t => (s.tags || []).includes(t)));
+
+  const wrap = document.getElementById("regList");
+  if (!list.length) {
+    wrap.innerHTML = `<div class="empty">没有匹配的收录站点</div>`;
+    return;
+  }
+
+  const groups = [];
+  (REGISTRY.presetGroups || []).forEach(g => groups.push(g));
+  list.forEach(s => { if (s.group && !groups.includes(s.group)) groups.push(s.group); });
+
+  const html = [];
+  groups.forEach(g => {
+    const items = list.filter(s => s.group === g);
+    if (!items.length) return;
+    const collapsed = state.regCollapsed.includes(g);
+    html.push(`<section class="group ${collapsed ? "collapsed" : ""}" data-group="${esc(g)}">
+      <div class="group-head">
+        <span class="arrow">▼</span>
+        <span class="gname">${esc(g)}</span>
+        <span class="gcount">${items.length}</span>
+      </div>
+      <div class="group-body">${items.map(regCardHTML).join("")}</div>
+    </section>`);
+  });
+  wrap.innerHTML = html.join("");
+
+  wrap.querySelectorAll(".group-head").forEach(h => {
+    h.onclick = () => {
+      const sec = h.parentElement;
+      const g = sec.dataset.group;
+      sec.classList.toggle("collapsed");
+      const set = new Set(state.regCollapsed);
+      if (sec.classList.contains("collapsed")) set.add(g); else set.delete(g);
+      state.regCollapsed = [...set];
+    };
+  });
+  wrap.querySelectorAll("[data-add]").forEach(btn => {
+    btn.onclick = () => addFromRegistry(btn.dataset.add);
+  });
+}
+function regCardHTML(s) {
+  const added = state.sites.some(x => x.sourceId === s.id);
+  const tags = (s.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join("");
+  return `<div class="reg-card">
+    <div class="reg-top">
+      <div class="reg-name">${(s.tags||[]).includes("常用") ? '<span style="color:var(--accent);margin-right:4px;font-size:15px">☆</span>' : ''}${esc(s.name)}</div>
+      <button class="mini-btn ${added ? "done" : ""}" data-add="${esc(s.id)}" ${added ? "disabled" : ""}>${added ? "已添加" : "添加"}</button>
+    </div>
+    <div class="card-tags">${tags}</div>
+    <div class="reg-note">${esc(s.group)}｜${linkify(s.note || "")}</div>
+  </div>`;
+}
+function addFromRegistry(rid) {
+  const r = REGISTRY.sites.find(s => s.id === rid);
+  if (!r) return;
+  if (state.sites.some(x => x.sourceId === r.id)) { toast("已经添加过了"); return; }
+  let host = "";
+  try { host = new URL(r.invite).origin; } catch {}
+  const obj = {
+    id: uid(),
+    name: r.name,
+    invite: r.invite,
+    group: r.group,
+    tags: [...(r.tags || [])],
+    note: r.note || "",
+    hasCheckin: ["有签到", "限制签到"].includes(r.group),
+    todayCheckedIn: false,
+    lastCheckinDate: "",
+    balance: "",
+    quotaPerUnit: "",
+    currency: "",
+    apiEndpoint: host ? host + "/v1" : "",
+    accessToken: "",
+    userId: "",
+    sourceId: r.id,
+    createdAt: new Date().toISOString(),
+    lastOpenedAt: ""
+  };
+  state.sites.push(obj);
+  store.saveSites(state.sites);
+  renderList();
+  renderRegistry();
+  toast(`已添加「${r.name}」`);
+}
+
+function openSettings() {
+  const s = state.settings;
+  const w = s.wallpaper || { type: "none", value: "", opacity: 0.82 };
+  const presetColors = ["#e8e4dd","#d4d9d6","#cfd6dc","#e3d8d2","#dcd8d0","#d9d5d0"];
+
+  showModal(`
+    <h3>设置</h3>
+    <div class="settings-section">
+      <h4>主题</h4>
+      <div class="theme-row">
+        <button class="theme-btn ${s.theme !== "mono" ? "active" : ""}" data-theme-btn="morandi">莫兰迪</button>
+        <button class="theme-btn ${s.theme === "mono" ? "active" : ""}" data-theme-btn="mono">极简黑白</button>
+      </div>
+    </div>
+    <div class="settings-section">
+      <h4>应用名称</h4>
+      <input id="s-appName" value="${esc(s.appName)}" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--radius);background:#ffffff !important;color:#2d2b28 !important;-webkit-appearance:none;">
+    </div>
+    <div class="settings-section">
+      <h4>壁纸</h4>
+      <div class="field"><label>类型</label>
+        <select id="s-wallType">
+          <option value="none" ${w.type === "none" ? "selected" : ""}>无</option>
+          <option value="color" ${w.type === "color" ? "selected" : ""}>纯色</option>
+          <option value="gradient" ${w.type === "gradient" ? "selected" : ""}>渐变</option>
+          <option value="image" ${w.type === "image" ? "selected" : ""}>图片 URL</option>
+        </select>
+      </div>
+      <div class="field" id="colorField" style="display:${w.type === "color" ? "block" : "none"}">
+        <label>选颜色（点预设或自选）</label>
+        <div class="color-row">
+          <input type="color" id="s-wallColor" value="${/^#[0-9a-fA-F]{6}$/.test(w.value || "") ? w.value : "#e8e4dd"}">
+          <div class="preset-colors" id="presetColors">
+            ${presetColors.map(c => `<div class="preset-color" data-color="${c}" style="background:${c}" title="${c}"></div>`).join("")}
+          </div>
+        </div>
+      </div>
+      <div class="field" id="valueField" style="display:${w.type === "color" || w.type === "none" ? "none" : "block"}">
+        <label>${w.type === "gradient" ? "渐变 CSS" : w.type === "image" ? "图片链接" : "值"}</label>
+        <input id="s-wallValue" value="${esc(w.value)}" placeholder="如 linear-gradient(...) 或 https://...">
+      </div>
+      <div class="wall-preview" id="wallPreview"></div>
+      <div class="field"><label>卡片不透明度：<span id="opVal">${Math.round((w.opacity || 0.82) * 100)}%</span></label>
+        <input type="range" id="s-opacity" min="40" max="100" value="${Math.round((w.opacity || 0.82) * 100)}" style="width:100%">
+      </div>
+    </div>
+    <div class="settings-section">
+      <h4>数据</h4>
+      <div class="btn-row" style="margin-top:0">
+        <button class="btn" id="s-export">导出存档</button>
+        <button class="btn" id="s-import">导入存档</button>
+      </div>
+      <label class="check-row"><input type="checkbox" id="s-exportTokens"> 导出时包含访问令牌（分享存档前请取消勾选）</label>
+      <div class="hint" style="margin-top:6px">导入会合并到现有站点，同 ID 覆盖。</div>
+      <input type="file" id="s-file" accept="application/json" style="display:none">
+    </div>
+    <div class="btn-row">
+      <button class="btn" id="s-close">关闭</button>
+    </div>
+  `);
+
+  document.querySelectorAll("[data-theme-btn]").forEach(b => {
+    b.onclick = () => {
+      s.theme = b.dataset.themeBtn;
+      store.saveSettings(s);
+      applyTheme();
+      openSettings();
+    };
+  });
+  document.getElementById("s-appName").oninput = e => {
+    s.appName = e.target.value || "API小仓库";
+    store.saveSettings(s);
+    applyWallpaper();
+  };
+  const preview = () => {
+    const type = document.getElementById("s-wallType").value;
+    const opacity = parseInt(document.getElementById("s-opacity").value, 10) / 100;
+    let value = "";
+    if (type === "color") value = document.getElementById("s-wallColor").value;
+    else if (type === "gradient" || type === "image") value = document.getElementById("s-wallValue").value.trim();
+    s.wallpaper = { type, value, opacity };
+    store.saveSettings(s);
+    applyWallpaper();
+    const pv = document.getElementById("wallPreview");
+    let css = "transparent";
+    if (type === "color") css = value || "transparent";
+    else if (type === "gradient") css = value || "transparent";
+    else if (type === "image") css = value ? `url("${value}") center/cover no-repeat` : "transparent";
+    pv.style.background = css;
+  };
+  const typeSel = document.getElementById("s-wallType");
+  typeSel.onchange = () => {
+    const t = typeSel.value;
+    document.getElementById("colorField").style.display = t === "color" ? "block" : "none";
+    document.getElementById("valueField").style.display = (t === "gradient" || t === "image") ? "block" : "none";
+    preview();
+  };
+  const colorInput = document.getElementById("s-wallColor");
+  colorInput.oninput = preview;
+  colorInput.onchange = preview;
+  document.querySelectorAll("#presetColors .preset-color").forEach(el => {
+    el.onclick = () => {
+      colorInput.value = el.dataset.color;
+      preview();
+    };
+  });
+  document.getElementById("s-wallValue").oninput = preview;
+  document.getElementById("s-opacity").oninput = e => {
+    document.getElementById("opVal").textContent = e.target.value + "%";
+    preview();
+  };
+  preview();
+  
+  document.getElementById("s-export").onclick = () => {
+    const includeTokens = document.getElementById("s-exportTokens").checked;
+    const sites = state.sites.map(x => {
+      const copy = { ...x };
+      if (!includeTokens) { copy.accessToken = ""; copy.userId = ""; }
+      return copy;
+    });
+    const data = {
+      app: "API小仓库", version: 1, exportedAt: new Date().toISOString(),
+      includesTokens: includeTokens, settings: s, sites
+    };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "api-xiaocangku-backup-" + todayStr() + ".json";
+    a.click();
+    URL.revokeObjectURL(a.href);
+    toast(includeTokens ? "已导出（含令牌）" : "已导出（不含令牌）");
+  };
+  document.getElementById("s-import").onclick = () => document.getElementById("s-file").click();
+  document.getElementById("s-file").onchange = e => {
+    const f = e.target.files[0];
+    if (!f) return;
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const data = JSON.parse(reader.result);
+        if (!Array.isArray(data.sites)) throw new Error("格式不对");
+        if (!confirm(`导入 ${data.sites.length} 个站点，合并到现有列表？`)) return;
+        data.sites.forEach(x => {
+          if (!x.id) x.id = uid();
+          const idx = state.sites.findIndex(y => y.id === x.id);
+          if (idx >= 0) state.sites[idx] = x; else state.sites.push(x);
+        });
+        if (data.settings) {
+          state.settings = Object.assign(state.settings, data.settings);
+          store.saveSettings(state.settings);
+        }
+        store.saveSites(state.sites);
+        closeModal();
+        applyTheme(); applyWallpaper();
+        renderGroupFilter(); renderTagFilter(); renderList(); renderRegistry();
+        toast("导入完成");
+      } catch (err) { toast("导入失败：" + err.message); }
+    };
+    reader.readAsText(f);
+  };
+  document.getElementById("s-close").onclick = closeModal;
+}
+
+function showModal(html) {
+  const mask = document.getElementById("modalMask");
+  document.getElementById("modalBox").innerHTML = html;
+  mask.classList.add("show");
+}
+function closeModal() {
+  document.getElementById("modalMask").classList.remove("show");
+  document.getElementById("modalBox").innerHTML = "";
+}
+let toastTimer = null;
+function toast(msg) {
+  const el = document.getElementById("toast");
+  el.textContent = msg;
+  el.classList.add("show");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove("show"), 1800);
+}
+
+function bindEvents() {
+  document.getElementById("btnNotice").onclick = () => {
+    const noticeLines = (REGISTRY.notice || []).map(n => `【${esc(n.date)}】${esc(n.title)}：${linkify(n.content)}`);
+    noticeLines.push(`联系作者：${esc(REGISTRY.contact.email || "")}（QQ ${esc(REGISTRY.contact.qq || "")}）`);
+    showModal(`
+      <h3>公告</h3>
+      <div class="notice-box" style="max-height:60vh;overflow-y:auto">${noticeLines.join("<br><br>")}</div>
+      <div class="btn-row"><button class="btn" id="btnCloseNotice">关闭</button></div>
+    `);
+    document.getElementById("btnCloseNotice").onclick = closeModal;
+  };
+  document.getElementById("btnSearch").onclick = () => {
+    const bar = document.getElementById("searchBar");
+    bar.classList.toggle("show");
+    if (bar.classList.contains("show")) document.getElementById("searchInput").focus();
+  };
+  document.getElementById("btnCloseSearch").onclick = () => {
+    document.getElementById("searchBar").classList.remove("show");
+    document.getElementById("searchInput").value = "";
+    state.search = "";
+    renderList();
+  };
+  document.getElementById("searchInput").oninput = e => { state.search = e.target.value; renderList(); };
+  document.getElementById("btnSettings").onclick = openSettings;
+  document.getElementById("btnAdd").onclick = () => openSiteForm(null);
+  document.getElementById("sortSelect").value = state.settings.sortMode || "custom";
+  document.getElementById("sortSelect").onchange = e => {
+    state.settings.sortMode = e.target.value;
+    store.saveSettings(state.settings);
+    renderList();
+  };
+  document.getElementById("filterToggle").onclick = () => {
+    state.settings.filterCollapsed = !state.settings.filterCollapsed;
+    store.saveSettings(state.settings);
+    updateFilterUI();
+  };
+  document.getElementById("regFilterToggle").onclick = () => {
+    state.settings.regFilterCollapsed = !state.settings.regFilterCollapsed;
+    store.saveSettings(state.settings);
+    updateRegFilterUI();
+  };
+  const panel = document.getElementById("registryPanel");
+  const entryBtn = document.getElementById("btnRegistry");
+  entryBtn.onclick = () => {
+    panel.hidden = !panel.hidden;
+    if (panel.hidden) {
+      entryBtn.textContent = "收录站点（点击展开）";
+      entryBtn.classList.remove("open");
+    } else {
+      entryBtn.textContent = "收起收录站点";
+      entryBtn.classList.add("open");
+      renderRegistry();
+    }
+  };
+  document.getElementById("regClose").onclick = () => {
+    panel.hidden = true;
+    entryBtn.textContent = "收录站点（点击展开）";
+    entryBtn.classList.remove("open");
+  };
+  document.getElementById("regSearch").oninput = e => {
+    state.regSearch = e.target.value;
+    renderRegistry();
+  };
+  document.getElementById("modalMask").onclick = e => {
+    if (e.target.id === "modalMask") closeModal();
+  };
+}
+
+init();

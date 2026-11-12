@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>管理后台 - API小仓库</title>
+  <style>
+    :root { --bg:#f5f3ef; --text:#2d2b28; --border:#b8c0c6; --accent:#8a9ba8; --radius:6px; }
+    * { box-sizing: border-box; }
+    body { margin:0; padding:20px; background:var(--bg); color:var(--text); font-family:-apple-system,sans-serif; font-size:15px; }
+    h1, h2 { font-family:Georgia,serif; margin-top:0; }
+    .container { max-width:900px; margin:0 auto; }
+    .card { background:#fff; border:1.5px solid var(--border); border-radius:var(--radius); padding:16px; margin-bottom:16px; }
+    .field { margin-bottom:10px; }
+    .field label { display:block; font-size:12px; color:#666; margin-bottom:4px; }
+    .field input, .field select, .field textarea { width:100%; padding:8px 10px; border:1.5px solid var(--border); border-radius:var(--radius); font-size:14px; }
+    .field textarea { min-height:60px; }
+    .btn { padding:8px 16px; border:1.5px solid var(--border); border-radius:var(--radius); background:#fff; cursor:pointer; font-size:14px; }
+    .btn.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+    .btn.danger { color:#b57b7b; border-color:#b57b7b; }
+    .btn-row { display:flex; gap:8px; margin-top:10px; }
+    .site-item { display:flex; align-items:flex-start; justify-content:space-between; border-bottom:1px dashed #eee; padding:10px 0; }
+    .site-info { flex:1; }
+    .site-name { font-weight:600; }
+    .site-meta { font-size:12px; color:#666; margin-top:4px; }
+    .hidden { display:none; }
+    .tag-list { display:flex; gap:6px; flex-wrap:wrap; margin-top:4px; }
+    .tag { font-size:11px; background:#e0e5e8; padding:2px 6px; border-radius:4px; color:#555; }
+    .toolbar { display:flex; gap:10px; margin-bottom:20px; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <div class="toolbar">
+    <button class="btn primary" id="btnExport">导出完整 registry.json</button>
+    <button class="btn" id="btnAddSite">新增收录站点</button>
+  </div>
+
+  <div class="card" id="formCard" style="display:none;">
+    <h2 id="formTitle">新增站点</h2>
+    <input type="hidden" id="f-id">
+    <div class="field"><label>站名 *</label><input id="f-name"></div>
+    <div class="field"><label>链接 *</label><input id="f-invite" placeholder="https://..."></div>
+    <div class="field"><label>分组</label><input id="f-group" list="groupList"><datalist id="groupList"></datalist></div>
+    <div class="field"><label>标签（逗号分隔，如：常用,试吃,生图）</label><input id="f-tags"></div>
+    <div class="field"><label>备注</label><textarea id="f-note"></textarea></div>
+    <div class="btn-row">
+      <button class="btn primary" id="btnSave">保存</button>
+      <button class="btn" id="btnCancel">取消</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <h2>公告与联系方式</h2>
+    <div class="field"><label>联系邮箱</label><input id="c-email"></div>
+    <div class="field"><label>联系 QQ</label><input id="c-qq"></div>
+    <div class="field"><label>公告列表（一行一条，格式：YYYY-MM-DD|标题|内容）</label><textarea id="c-notice" style="min-height:80px;"></textarea></div>
+  </div>
+
+  <div class="card">
+    <h2>收录站点列表</h2>
+    <div id="siteList"></div>
+  </div>
+</div>
+
+<script>
+  let registry = { notice: [], contact: {}, presetGroups: [], presetTags: [], sites: [] };
+
+  async function loadData() {
+    try {
+      const res = await fetch('./registry.json');
+      if (res.ok) registry = await res.json();
+    } catch (e) { alert('读取 registry.json 失败，请确保本地有该文件'); }
+    render();
+  }
+
+  function render() {
+    // 填充表单预设
+    document.getElementById('groupList').innerHTML = (registry.presetGroups || []).map(g => `<option value="${g}">`).join('');
+    document.getElementById('c-email').value = registry.contact?.email || '';
+    document.getElementById('c-qq').value = registry.contact?.qq || '';
+    document.getElementById('c-notice').value = (registry.notice || []).map(n => `${n.date}|${n.title}|${n.content}`).join('\n');
+
+    // 渲染站点
+    const wrap = document.getElementById('siteList');
+    wrap.innerHTML = registry.sites.map((s, idx) => `
+      <div class="site-item">
+        <div class="site-info">
+          <div class="site-name">${s.name}</div>
+          <div class="site-meta">${s.group} | ${s.invite}</div>
+          <div class="tag-list">${(s.tags || []).map(t => `<span class="tag">${t}</span>`).join('')}</div>
+          <div class="site-meta" style="color:#999;margin-top:4px;">${s.note || ''}</div>
+        </div>
+        <div class="btn-row" style="margin:0;">
+          <button class="btn" onclick="editSite(${idx})">编辑</button>
+          <button class="btn danger" onclick="delSite(${idx})">删除</button>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  document.getElementById('btnAddSite').onclick = () => {
+    document.getElementById('formCard').style.display = 'block';
+    document.getElementById('formTitle').innerText = '新增站点';
+    document.getElementById('f-id').value = '';
+    document.getElementById('f-name').value = '';
+    document.getElementById('f-invite').value = '';
+    document.getElementById('f-group').value = '';
+    document.getElementById('f-tags').value = '';
+    document.getElementById('f-note').value = '';
+  };
+
+  document.getElementById('btnCancel').onclick = () => {
+    document.getElementById('formCard').style.display = 'none';
+  };
+
+  window.editSite = (idx) => {
+    const s = registry.sites[idx];
+    document.getElementById('formCard').style.display = 'block';
+    document.getElementById('formTitle').innerText = '编辑站点';
+    document.getElementById('f-id').value = idx;
+    document.getElementById('f-name').value = s.name || '';
+    document.getElementById('f-invite').value = s.invite || '';
+    document.getElementById('f-group').value = s.group || '';
+    document.getElementById('f-tags').value = (s.tags || []).join(',');
+    document.getElementById('f-note').value = s.note || '';
+    window.scrollTo(0, 0);
+  };
+
+  window.delSite = (idx) => {
+    if (!confirm('确定删除该站点？')) return;
+    registry.sites.splice(idx, 1);
+    render();
+  };
+
+  document.getElementById('btnSave').onclick = () => {
+    const idx = document.getElementById('f-id').value;
+    const name = document.getElementById('f-name').value.trim();
+    const invite = document.getElementById('f-invite').value.trim();
+    if (!name || !invite) return alert('站名和链接必填');
+    
+    const tagsStr = document.getElementById('f-tags').value.trim();
+    const tags = tagsStr ? tagsStr.split(',').map(t => t.trim()).filter(Boolean) : [];
+
+    const obj = {
+      id: idx !== '' ? registry.sites[idx].id : 'r_' + Date.now(),
+      name,
+      invite,
+      group: document.getElementById('f-group').value.trim() || '其他',
+      tags,
+      note: document.getElementById('f-note').value.trim()
+    };
+
+    if (idx !== '') registry.sites[idx] = obj;
+    else registry.sites.push(obj);
+
+    document.getElementById('formCard').style.display = 'none';
+    render();
+  };
+
+  document.getElementById('c-email').onchange = e => registry.contact.email = e.target.value.trim();
+  document.getElementById('c-qq').onchange = e => registry.contact.qq = e.target.value.trim();
+  document.getElementById('c-notice').onchange = e => {
+    registry.notice = e.target.value.split('\n').filter(line => line.includes('|')).map(line => {
+      const [date, title, ...rest] = line.split('|');
+      return { date: date.trim(), title: title.trim(), content: rest.join('|').trim() };
+    });
+  };
+
+  document.getElementById('btnExport').onclick = () => {
+    // 同步一下最新表单里的公告和联系方式
+    registry.contact.email = document.getElementById('c-email').value.trim();
+    registry.contact.qq = document.getElementById('c-qq').value.trim();
+    registry.updatedAt = new Date().toISOString().split('T')[0];
+    
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(registry, null, 2));
+    const dlAnchor = document.createElement('a');
+    dlAnchor.setAttribute("href", dataStr);
+    dlAnchor.setAttribute("download", "registry.json");
+    document.body.appendChild(dlAnchor);
+    dlAnchor.click();
+    dlAnchor.remove();
+  };
+
+  loadData();
+</script>
+</body>
+</html>
