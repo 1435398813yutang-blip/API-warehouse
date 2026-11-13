@@ -86,7 +86,6 @@ function applyWallpaper() {
   document.getElementById("appName").textContent = name; document.title = name;
 }
 
-/* ====== Tab切换 ====== */
 window.switchTab = (tab) => {
   state.currentTab = tab;
   document.querySelectorAll(".page").forEach(p => p.classList.remove("active"));
@@ -98,7 +97,6 @@ window.switchTab = (tab) => {
   else document.getElementById("btnAdd").style.display = "none";
 };
 
-/* ====== 仓库逻辑 ====== */
 function updateFilterUI() { const c = document.getElementById("filterContent"); const t = document.getElementById("filterTitle"); const a = document.getElementById("filterArrow"); if (state.settings.filterCollapsed) { c.style.display = "none"; t.textContent = "筛选与排序（点击展开）"; a.style.transform = "rotate(-90deg)"; } else { c.style.display = "block"; t.textContent = "筛选与排序（点击收起）"; a.style.transform = "rotate(0deg)"; } }
 function updateRegFilterUI() { const c = document.getElementById("regFilterContent"); const t = document.getElementById("regFilterTitle"); const a = document.getElementById("regFilterArrow"); if (state.settings.regFilterCollapsed) { c.style.display = "none"; t.textContent = "筛选（点击展开）"; a.style.transform = "rotate(-90deg)"; } else { c.style.display = "block"; t.textContent = "筛选（点击收起）"; a.style.transform = "rotate(0deg)"; } }
 function updateModelFilterUI() { const c = document.getElementById("modelFilterContent"); const t = document.getElementById("modelFilterTitle"); const a = document.getElementById("modelFilterArrow"); if (state.settings.modelFilterCollapsed) { c.style.display = "none"; t.textContent = "筛选（点击展开）"; a.style.transform = "rotate(-90deg)"; } else { c.style.display = "block"; t.textContent = "筛选（点击收起）"; a.style.transform = "rotate(0deg)"; } }
@@ -586,6 +584,9 @@ document.getElementById("modelSearchInput").oninput = e => { state.modelSearch =
 /* ====== 设置与弹窗 ====== */
 function openSettings() {
   const s = state.settings; const w = s.wallpaper || { type: "none", value: "", opacity: 0.82 }; const presetColors = ["#e8e4dd","#d4d9d6","#cfd6dc","#e3d8d2","#dcd8d0","#d9d5d0"];
+  const appVersion = "v1.1.0"; 
+  const cacheVersion = "v1.1.0"; 
+  
   showModal(`
     <h3>设置</h3>
     <div class="settings-section"><h4>主题</h4><div class="theme-row"><button class="theme-btn ${s.theme !== "mono" ? "active" : ""}" data-theme-btn="morandi">莫兰迪</button><button class="theme-btn ${s.theme === "mono" ? "active" : ""}" data-theme-btn="mono">极简黑白</button></div></div>
@@ -605,6 +606,11 @@ function openSettings() {
       <label class="check-row"><input type="checkbox" id="s-exportTokens"> 导出时包含访问令牌（分享存档前请取消勾选）</label>
       <input type="file" id="s-file" accept="application/json" style="display:none">
     </div>
+    
+    <div style="text-align:center; font-size:11px; color:var(--text-2); margin-top:20px; opacity:0.7;">
+      API小仓库 ${appVersion} (缓存:${cacheVersion})
+    </div>
+    
     <div class="btn-row"><button class="btn" id="s-close">关闭</button></div>
   `);
   
@@ -612,6 +618,7 @@ function openSettings() {
   document.querySelectorAll("[data-theme-btn]").forEach(b => { b.onclick = () => { s.theme = b.dataset.themeBtn; store.saveSettings(s); applyTheme(); openSettings(); }; });
   document.getElementById("s-appName").oninput = e => { s.appName = e.target.value || "API小仓库"; store.saveSettings(s); applyWallpaper(); };
   document.getElementById("s-proxyUrl").oninput = e => { s.proxyUrl = e.target.value.trim(); store.saveSettings(s); };
+  
   const preview = () => { const type = document.getElementById("s-wallType").value; const opacity = parseInt(document.getElementById("s-opacity").value, 10) / 100; let value = ""; if (type === "color") { value = document.getElementById("s-wallColor").value; } else if (type === "image") { value = document.getElementById("s-wallValue").value.trim(); if (!value && s.wallpaper.type === "image" && s.wallpaper.value.startsWith('data:')) value = s.wallpaper.value; } s.wallpaper = { type, value, opacity }; store.saveSettings(s); applyWallpaper(); const pv = document.getElementById("wallPreview"); let css = "transparent"; if (type === "color") css = value || "transparent"; else if (type === "image") css = value ? `url("${value}") center/cover no-repeat` : "transparent"; pv.style.background = css; };
   const typeSel = document.getElementById("s-wallType"); typeSel.onchange = () => { const t = typeSel.value; document.getElementById("colorField").style.display = t === "color" ? "block" : "none"; document.getElementById("valueField").style.display = t === "image" ? "block" : "none"; preview(); };
   const colorInput = document.getElementById("s-wallColor"); colorInput.oninput = preview; colorInput.onchange = preview; document.querySelectorAll("#presetColors .preset-color").forEach(el => { el.onclick = () => { colorInput.value = el.dataset.color; preview(); }; });
