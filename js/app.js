@@ -3,7 +3,7 @@ const KEY_SITES = "axc_sites_v1";
 const KEY_SETTINGS = "axc_settings_v1";
 const KEY_PRICES = "axc_prices_v1";
 const KEY_READ_NOTICES = "axc_read_notices_v1";
-let REGISTRY = { notice: [], contact: {}, presetGroups: [], presetTags: [], sites: [] };
+let REGISTRY = { notice: [], contact: [], presetGroups: [], presetTags: [], sites: [] };
 
 function defaultSettings() {
   return {
@@ -53,8 +53,34 @@ function linkify(text) {
   result += esc(text.slice(lastIndex)); return result;
 }
 
+window.copyText = (text) => {
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(text).then(() => toast("已复制")).catch(() => fallbackCopy(text));
+  } else {
+    fallbackCopy(text);
+  }
+};
+function fallbackCopy(text) { 
+  const ta = document.createElement("textarea"); ta.value = text; document.body.appendChild(ta); ta.select(); 
+  try { document.execCommand("copy"); toast("已复制"); } catch { toast("复制失败"); } 
+  document.body.removeChild(ta); 
+}
+
 async function init() {
-  try { const res = await fetch('./registry.json'); if (res.ok) REGISTRY = await res.json(); } catch (err) {}
+  try { 
+    const res = await fetch('./registry.json'); 
+    if (res.ok) {
+      REGISTRY = await res.json();
+      if (REGISTRY.contact && !Array.isArray(REGISTRY.contact)) {
+        const newContact = [];
+        if (REGISTRY.contact.email) newContact.push({ label: '邮箱', value: REGISTRY.contact.email });
+        if (REGISTRY.contact.qq) newContact.push({ label: 'QQ', value: REGISTRY.contact.qq });
+        REGISTRY.contact = newContact;
+      }
+      if (!Array.isArray(REGISTRY.contact)) REGISTRY.contact = [];
+    }
+  } catch (err) {}
+
   state.settings = store.getSettings(); state.sites = store.getSites(); state.modelPrices = store.getPrices();
   const today = todayStr(); let changed = false;
   state.sites.forEach(s => { if (s.todayCheckedIn && s.lastCheckinDate !== today) { s.todayCheckedIn = false; changed = true; } });
@@ -208,8 +234,7 @@ function cardHTML(s) {
 
 function openSite(id) { const s = state.sites.find(x => x.id === id); if (!s) return; s.lastOpenedAt = new Date().toISOString(); store.saveSites(state.sites); window.open(s.invite || s.mainUrl, "_blank"); }
 function toggleCheckin(id) { const s = state.sites.find(x => x.id === id); if (!s) return; s.todayCheckedIn = !s.todayCheckedIn; if (s.todayCheckedIn) s.lastCheckinDate = todayStr(); store.saveSites(state.sites); renderList(); toast(s.todayCheckedIn ? "已标记今日签到" : "已取消签到标记"); }
-function copyInvite(id) { const s = state.sites.find(x => x.id === id); if (!s) return; const text = s.invite || s.mainUrl || ""; if (navigator.clipboard?.writeText) { navigator.clipboard.writeText(text).then(() => toast("已复制链接")).catch(() => fallbackCopy(text)); } else fallbackCopy(text); }
-function fallbackCopy(text) { const ta = document.createElement("textarea"); ta.value = text; document.body.appendChild(ta); ta.select(); try { document.execCommand("copy"); toast("已复制链接"); } catch { toast("复制失败"); } document.body.removeChild(ta); }
+function copyInvite(id) { const s = state.sites.find(x => x.id === id); if (!s) return; const text = s.invite || s.mainUrl || ""; copyText(text); }
 function deleteSite(id) { const s = state.sites.find(x => x.id === id); if (!s) return; if (!confirm(`确定删除「${s.name}」？`)) return; state.sites = state.sites.filter(x => x.id !== id); state.selectedMyIds.delete(id); store.saveSites(state.sites); renderList(); toast("已删除"); }
 
 /* ====== 多选与批量操作逻辑 ====== */
@@ -265,9 +290,8 @@ document.getElementById("btnOpenBatch").onclick = () => {
       }
     });
     if(!text) return toast("选中站点没有填写链接");
-    navigator.clipboard.writeText(text.trim()).then(() => {
-      toast("已复制选中站点的邀请链接！"); closeModal(); state.selectedMyIds.clear(); renderList();
-    }).catch(() => fallbackCopy(text));
+    copyText(text.trim());
+    closeModal(); state.selectedMyIds.clear(); renderList();
   };
 
   document.getElementById("b-apply").onclick = () => {
@@ -318,7 +342,7 @@ async function fetchBalance(id) {
     else if (type === "siliconflow") { if (data?.data?.totalBalance !== undefined) newBalance = String(data.data.totalBalance); else if (data?.totalBalance !== undefined) newBalance = String(data.totalBalance); }
     if (newBalance !== "") { s.balance = newBalance; store.saveSites(state.sites); renderList(); toast("余额已成功更新"); }
     else throw new Error("未找到余额字段");
-  } catch (err) { console.error(err); toast("拉取失败！请先检查是否开启了网络代理，或检查你的 Worker 代理是否正常。也可以直接去站点手动查看并填写余额。"); }
+  } catch (err) { console.error(err); toast("拉取失败！请先检查是否开启了网络代理，或检查你的 Worker 代理是否正常。"); }
 }
 
 function openSiteForm(id) {
@@ -537,7 +561,7 @@ window.openModelDrawer = (siteId) => {
       <div class="card-note">${esc(s.note || "暂无备注")}</div>
       <div class="btn-row" style="margin-top:12px;">
         <button class="btn primary" onclick="window.open('${esc(s.invite)}', '_blank')">前往注册 / 登录</button>
-        <button class="btn" onclick="navigator.clipboard.writeText('${esc(s.invite)}'); toast('已复制');">复制链接</button>
+        <button class="btn" onclick="copyText('${esc(s.invite)}')">复制链接</button>
       </div>
     </div>
     <div class="btn-row"><button class="btn" onclick="closeModal()">关闭</button></div>
@@ -584,8 +608,8 @@ document.getElementById("modelSearchInput").oninput = e => { state.modelSearch =
 /* ====== 设置与弹窗 ====== */
 function openSettings() {
   const s = state.settings; const w = s.wallpaper || { type: "none", value: "", opacity: 0.82 }; const presetColors = ["#e8e4dd","#d4d9d6","#cfd6dc","#e3d8d2","#dcd8d0","#d9d5d0"];
-  const appVersion = "v1.1.0"; 
-  const cacheVersion = "v1.1.0"; 
+  const appVersion = "v1.1.1"; 
+  const cacheVersion = "v1.1.1"; 
   
   showModal(`
     <h3>设置</h3>
@@ -607,8 +631,9 @@ function openSettings() {
       <input type="file" id="s-file" accept="application/json" style="display:none">
     </div>
     
-    <div style="text-align:center; font-size:11px; color:var(--text-2); margin-top:20px; opacity:0.7;">
-      API小仓库 ${appVersion} (缓存:${cacheVersion})
+    <div style="text-align:center; font-size:11px; color:var(--text-2); margin-top:20px; opacity:0.7; line-height:1.8;">
+      API小仓库 ${appVersion} (缓存:${cacheVersion})<br>
+      设计者：<span onclick="showContactModal()" style="color:var(--accent); cursor:pointer; text-decoration:underline;">漆岐</span>
     </div>
     
     <div class="btn-row"><button class="btn" id="s-close">关闭</button></div>
@@ -630,6 +655,34 @@ function openSettings() {
   document.getElementById("s-file").onchange = e => { const f = e.target.files[0]; if (!f) return; const reader = new FileReader(); reader.onload = () => { try { const data = JSON.parse(reader.result); if (!Array.isArray(data.sites)) throw new Error("格式不对"); if (!confirm(`导入 ${data.sites.length} 个站点，合并到现有列表？`)) return; data.sites.forEach(x => { if (!x.id) x.id = uid(); const idx = state.sites.findIndex(y => y.id === x.id); if (idx >= 0) state.sites[idx] = x; else state.sites.push(x); }); if (data.settings) { state.settings = Object.assign(state.settings, data.settings); store.saveSettings(state.settings); } store.saveSites(state.sites); closeModal(); applyTheme(); applyWallpaper(); renderGroupFilter(); renderTagFilter(); renderList(); renderRegistry(); toast("导入完成"); } catch (err) { toast("导入失败：" + err.message); } }; reader.readAsText(f); };
   document.getElementById("s-close").onclick = closeModal;
 }
+
+function getContactHtml() {
+  let html = '';
+  if (Array.isArray(REGISTRY.contact)) {
+    REGISTRY.contact.forEach(c => {
+      if (!c.label || !c.value) return;
+      let valHtml = '';
+      if (c.value.startsWith('http://') || c.value.startsWith('https://')) {
+        valHtml = `<a href="${esc(c.value)}" target="_blank">${esc(c.value)}</a> <button class="mini-btn" onclick="copyText('${esc(c.value)}')" style="padding:0 4px; font-size:11px;">复制</button>`;
+      } else {
+        valHtml = `${esc(c.value)} <button class="mini-btn" onclick="copyText('${esc(c.value)}')" style="padding:0 4px; font-size:11px;">复制</button>`;
+      }
+      html += `<div style="margin-bottom:4px;"><span style="color:var(--text-2);">${esc(c.label)}：</span>${valHtml}</div>`;
+    });
+  }
+  return html;
+}
+
+window.showContactModal = () => {
+  const html = getContactHtml();
+  showModal(`
+    <h3>联系作者（设计者：漆岐）</h3>
+    <div style="font-size:13px; line-height:1.8; margin-bottom:16px;">
+      ${html || '<div style="color:#999;">暂未配置联系方式</div>'}
+    </div>
+    <div class="btn-row"><button class="btn" onclick="closeModal()">关闭</button></div>
+  `);
+};
 
 function showTutorial() {
   showModal(`
@@ -679,7 +732,25 @@ function bindEvents() {
   document.querySelectorAll(".nav-item").forEach(n => n.onclick = () => switchTab(n.dataset.tab));
   document.getElementById("btnNotice").onclick = () => {
     const readList = store.getReadNotices();
-    let html = `<h3>公告</h3><div class="notice-contact"><b>联系作者</b><br>邮箱：${esc(REGISTRY.contact?.email || "")}<br>QQ：${esc(REGISTRY.contact?.qq || "")}</div>`;
+    const contactHtml = getContactHtml();
+    
+    let html = `<h3>公告</h3>`;
+    
+    // 联系方式折叠面板
+    if (contactHtml) {
+      html += `
+        <div class="notice-contact" style="padding:0; overflow:hidden; border:none; background:transparent; margin-bottom:12px;">
+          <div class="contact-collapse" onclick="this.querySelector('.contact-body').classList.toggle('hidden'); this.querySelector('.arrow').classList.toggle('open');" style="padding:10px 12px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; background:#fff; border:1.5px solid var(--border); border-radius:var(--radius);">
+            <b style="font-size:13px; color:var(--text);">联系方式（点击展开）</b>
+            <span class="arrow" style="font-size:10px; transition:0.2s;">▼</span>
+          </div>
+          <div class="contact-body hidden" style="padding:0; font-size:13px; background:transparent;">
+            <div style="margin-top:8px; background:#fff; padding:12px; border-radius:var(--radius); border:1.5px solid var(--border);">${contactHtml}</div>
+          </div>
+        </div>
+      `;
+    }
+
     let notices = (REGISTRY.notice || []).slice();
     notices.sort((a, b) => {
       const pinA = a.isPinned ? 1 : 0;
