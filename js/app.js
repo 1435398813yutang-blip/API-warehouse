@@ -739,13 +739,13 @@ function bindEvents() {
     // 联系方式折叠面板
     if (contactHtml) {
       html += `
-        <div class="notice-contact" style="padding:0; overflow:hidden; border:none; background:transparent; margin-bottom:12px;">
-          <div class="contact-collapse" onclick="this.querySelector('.contact-body').classList.toggle('hidden'); this.querySelector('.arrow').classList.toggle('open');" style="padding:10px 12px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; background:#fff; border:1.5px solid var(--border); border-radius:var(--radius);">
+        <div class="notice-contact" style="padding:0; overflow:hidden; margin-bottom:12px;">
+          <div id="contactToggle" style="padding:12px; cursor:pointer; display:flex; justify-content:space-between; align-items:center;">
             <b style="font-size:13px; color:var(--text);">联系方式（点击展开）</b>
-            <span class="arrow" style="font-size:10px; transition:0.2s;">▼</span>
+            <span id="contactArrow" style="font-size:10px; color:var(--text-2); transition:transform 0.2s; transform:rotate(-90deg);">▼</span>
           </div>
-          <div class="contact-body hidden" style="padding:0; font-size:13px; background:transparent;">
-            <div style="margin-top:8px; background:#fff; padding:12px; border-radius:var(--radius); border:1.5px solid var(--border);">${contactHtml}</div>
+          <div id="contactBody" style="display:none; padding:0 12px 12px 12px; border-top:1px dashed var(--border);">
+            <div style="margin-top:8px;">${contactHtml}</div>
           </div>
         </div>
       `;
@@ -770,6 +770,21 @@ function bindEvents() {
     });
     html += `<div class="btn-row"><button class="btn" id="btnCloseNotice">关闭</button></div>`;
     showModal(html); 
+    
+    if (document.getElementById("contactToggle")) {
+      document.getElementById("contactToggle").onclick = () => {
+        const body = document.getElementById("contactBody");
+        const arrow = document.getElementById("contactArrow");
+        if (body.style.display === "none") {
+          body.style.display = "block";
+          arrow.style.transform = "rotate(0deg)";
+        } else {
+          body.style.display = "none";
+          arrow.style.transform = "rotate(-90deg)";
+        }
+      };
+    }
+
     document.querySelectorAll(".notice-header").forEach(header => { header.onclick = () => { header.parentElement.classList.toggle("expanded"); }; });
     store.saveReadNotices(newReadList);
     document.getElementById("noticeBadge").style.display = "none";
