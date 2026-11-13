@@ -77,6 +77,21 @@ a{color:var(--accent);text-decoration:underline;word-break:break-all}
 .sort-row select{padding:4px 8px;border:1.5px solid var(--border);border-radius:var(--radius);
   background:rgba(var(--card-rgb),var(--card-opacity));color:var(--text);font-size:12px}
 
+/* === 修复模型页筛选面板过高的问题 === */
+#modelFilterContent {
+  max-height: 40vh; 
+  overflow-y: auto;
+  padding-right: 4px;
+}
+/* 优化内部滚动条的视觉效果 */
+#modelFilterContent::-webkit-scrollbar {
+  width: 4px;
+}
+#modelFilterContent::-webkit-scrollbar-thumb {
+  background: var(--border);
+  border-radius: 4px;
+}
+
 .section-divider{display:flex;align-items:center;margin:8px 16px 12px;color:var(--text-2);font-size:12px;position:relative;z-index:10}
 .section-divider::before,.section-divider::after{content:'';flex:1;border-bottom:1.5px solid var(--border)}
 .section-divider span{padding:0 10px}
