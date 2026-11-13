@@ -1,0 +1,1116 @@
+{
+  "version": 1,
+  "updatedAt": "2026-11-13",
+  "notice": [
+    {
+      "date": "2026-11-12",
+      "title": "工具介绍-API小仓库v1.0",
+      "content": "⚠️及时备份数据，数据默认缓存在浏览器本地，可能会被清理从而丢失，只能凭存档找回。\n\n图文教程放在爱发电，可在公告-联系方式处查看\n\n【核心功能】\n1.快捷添加已收录站点并管理我的站点\n2.自动拉取站点余额方便进行记录\n3.拉取各个站点模型列表进行对比\n（2.3.需配置网络代理并开启🔮，可在设置处查看）\n\n【首页】\n一、菜单栏\n1.右侧可查看公告\n2.搜索键支持搜索收录站点和我的站点\n3.打开设置页配置应用名称、网络代理（拉取余额和模型用）、壁纸主题、导入导出数据\n\n二、收录站点\n站点卡片支持以下功能：\n1.点击空白处跳转注册\n2.直接添加到我的站点\n3.筛选排序\n\n三、我的站点\n1.新建/添加站点：\n点击右下角可从空白模板新建站点，也可以从收录站点中一键添加到我的站点\n2.筛选排序：\n可对我的站点进行分组标签的筛选，可以按名字或余额排序\n3.签到状态：\n支持标注是否有签到并手动标注签到状态\n4.分组设置：\n填写分组时若拉不出选项可以把文字删掉再选择选项\n5.自定义备注：\n支持添加备注\n6.拉取余额：\n支持拉取余额，比例字段不知道怎么填可以点击下方教程查看\n7.站点编辑：\n支持对站点卡片的编辑、删除，可点击复制或打开编辑页中所填链接\n\n*“访问令牌”字段中，New-api体系站点必须填写个人设置-安全设置处的访问令牌（非sk-开头的key）。\n其他体系可以尝试填写sk-开头的密钥，若能成功拉取，拉出的模型可能受限于密钥本身的分组或站点设置；也有可能无法拉取。\nDeepSeek官方可以使用key拉取，将默认比例500000改为1即可正确显示余额。\n\n【设置】\n可配置应用名称、网络代理、修改壁纸主题透明度、导入导出数据\n一、网络代理\n拉取余额和模型功能必须配置，需要使用Cloudflare网站，输入框下方有图文教程入口，此配置完全免费，但需要全程科学上网（拉取余额和模型时也需开启）\n不需要拉取余额和模型可以不配置\n拉取完余额和模型也可以关闭🔮\n\n二、壁纸\n可以选择内置纯色主题或自行上传图片/图片url作为壁纸，工具会自动压缩以免内存过大导致卡顿（推荐使用图片url，内存影响更小）\n可以调整卡片透明度\n\n三、数据管理\n自行选择存档是否包含访问令牌，如果要分享存档务必不要带令牌\n\n【模型比价】\n可以拉取我的站点中收集的站点模型列表及价格进行比较，必须配置网络代理（见设置页教程）\n可以没有访问令牌，但如果需要价格准确，需要正确填写站点编辑页的各种换算比例。\n1.筛选搜索：\n支持筛选供应商、计费类型、来源站点，支持搜索模型名称\n2.价格显示：\n默认按照RMB显示价格（需正确配置站点编辑页的换算比例和人民币换算比例字段），会标注站内额度价格\n3.比价排序：\n默认按照价格由低到高排序\n4.拉取模型：\n部分模型有可能因为站点本身设置而拉取不全，工具本身已经尽量做出相关设置进行拉取\n5.查看站点：\n点击模型卡片可以查看站点详情（来源于我的站点）并复制或跳转站点卡片对应链接",
+      "isPinned": true
+    },
+    {
+      "date": "2026-11-12",
+      "title": "注意事项",
+      "content": "1.如果链接打不开可以尝试开/关网络或流量或🔮，邮件收不到同理，也可以翻翻邮件垃圾箱\n\n2.请自行了解api和🔮使用方法，小红书等平台有很多图文或视频教程\n\n3.签到、试吃、注册等各种信息可能更新不及时或有遗漏，如有需要可以查看公告处联系方式进行反馈\n\n4.各站子的瓜自行了解，本工具仅做收录\n\n5.部分站点通过邀请链接注册有额外试吃，有需要可以直接点击链接注册（内置链接即邀请链接），标注不确定的就是忘记有多少了但是应该是有的\n\n6.不需要邀请链接可删除sign-up后面的部分直接注册",
+      "isPinned": true
+    },
+    {
+      "date": "2026-11-13",
+      "title": "版本更新（v1.1.1）",
+      "content": "新增：\n1.批量选择收录站点，支持一键添加到我的站点\n2.批量选择我的站点，支持一键更换分组、更换标签（可选是否覆盖）、更换签到状态、复制邀请链接\n3.我的站点处，站点卡片编辑页新增“分享邀请链接”字段，用于批量复制邀请链接\n\n注意：\n批量复制邀请链接需要先在站点卡片编辑页面的“分享邀请链接”字段填入相应链接，如果没有邀请链接会用“主链接”字段内容代替",
+      "isPinned": false
+    },
+    {
+      "date": "2026-11-13",
+      "title": "版本更新（v1.2.1）",
+      "content": "1.更新模型比价页面的模型卡片，现已支持自动拉取模型分组并设置分组倍率，尽量避免价格不准\n*点击模型卡片下方的分组标签即可进行编辑，同一分组只需设置一次\n⚠️：动态计费模型无法拉取准确价格\n\n2.设置页面新增数据清理功能，如果出现导入存档不兼容等情况可以尝试先清除所有数据再重新导入存档\n*清除前记得导出备份",
+      "isPinned": false
+    }
+  ],
+  "contact": [
+    {
+      "label": "QQ",
+      "value": "1435398813"
+    },
+    {
+      "label": "邮箱",
+      "value": "1435398813@qq.com"
+    },
+    {
+      "label": "使用教程（爱发电）",
+      "value": "https://afdian.com/p/5b62fff2df4511f1a3ca52540025c377"
+    }
+  ],
+  "presetGroups": [
+    "付费站",
+    "公益站",
+    "有签到",
+    "限制签到",
+    "生图站"
+  ],
+  "presetTags": [
+    "试吃",
+    "无试吃",
+    "试吃不确定",
+    "需邀请码",
+    "关闭注册",
+    "生图",
+    "视频",
+    "音频",
+    "抗截断",
+    "常用"
+  ],
+  "sites": [
+    {
+      "id": "p5",
+      "name": "55",
+      "invite": "https://5w5.wtf/sign-up?aff=Dh4O",
+      "group": "付费站",
+      "tags": [
+        "无试吃",
+        "生图",
+        "视频",
+        "常用"
+      ],
+      "note": "QQ群1059326517，无试吃，自助补空回 https://5w5.wtf/huodong，可生图，可视频，有活动分组，常用"
+    },
+    {
+      "id": "p22",
+      "name": "梨叙",
+      "invite": "https://api.xrl.org.cn/sign-up?aff=VQv9",
+      "group": "付费站",
+      "tags": [
+        "试吃",
+        "抗截断",
+        "常用"
+      ],
+      "note": "QQ群1125167370，试吃找群管理，空回站内自助补，有抗截断，常用"
+    },
+    {
+      "id": "p27",
+      "name": "AnAn",
+      "invite": "https://api.waianan.com/sign-up?aff=a8me",
+      "group": "付费站",
+      "tags": [
+        "试吃",
+        "生图",
+        "视频",
+        "抗截断",
+        "常用"
+      ],
+      "note": "QQ群1127646168，试吃0.5，可生图，可视频，有抗截断，有福利分组，有时会上弱甲模型，太子挺便宜的并且表现尚可，常用"
+    },
+    {
+      "id": "p29",
+      "name": "恐龙响应时长两年半",
+      "invite": "https://api.klong.lat/sign-up?aff=eboN",
+      "group": "付费站",
+      "tags": [
+        "无试吃",
+        "生图",
+        "常用"
+      ],
+      "note": "QQ群1101399736，无试吃，可生图，gpt生图0.005/次，常用"
+    },
+    {
+      "id": "p37",
+      "name": "星辰",
+      "invite": "https://api1.apistar.com.cn/sign-up?aff=EP5f",
+      "group": "付费站",
+      "tags": [
+        "试吃不确定",
+        "生图",
+        "常用"
+      ],
+      "note": "QQ群616130403，试吃不确定，可生图，有试吃分组，常用"
+    },
+    {
+      "id": "p1",
+      "name": "ekan8",
+      "invite": "https://api.ekan8.com/sign-up?aff=WJIk",
+      "group": "付费站",
+      "tags": [
+        "试吃",
+        "生图"
+      ],
+      "note": "QQ群1084738689，试吃1，使用日志处补空回（见群），可生图"
+    },
+    {
+      "id": "p2",
+      "name": "蓝天",
+      "invite": "https://api.wasdv.top/sign-up?aff=h8iC",
+      "group": "付费站",
+      "tags": [
+        "试吃不确定"
+      ],
+      "note": "QQ群1082620986，试吃不确定，自助补空回 https://tools.wasdv.top/"
+    },
+    {
+      "id": "p3",
+      "name": "小鸡农场",
+      "invite": "https://api.68886868.xyz/sign-up?aff=eaNR",
+      "group": "付费站",
+      "tags": [
+        "无试吃",
+        "生图",
+        "抗截断"
+      ],
+      "note": "QQ群1109220526，无试吃，空回自动补（标注不补的模型除外），可生图，有抗截断"
+    },
+    {
+      "id": "p4",
+      "name": "千岛",
+      "invite": "https://api2.qiandao.mom/sign-up?aff=LCOo",
+      "group": "付费站",
+      "tags": [
+        "试吃",
+        "生图"
+      ],
+      "note": "QQ群1081392109，进群领试吃，自助补空回 https://refund.qiandao.mom，可生图，使用必需切换到对应令牌分组"
+    },
+    {
+      "id": "p6",
+      "name": "吱吱",
+      "invite": "https://api.zhi.lat/sign-up?aff=ZQTu",
+      "group": "付费站",
+      "tags": [
+        "试吃",
+        "生图"
+      ],
+      "note": "QQ群885716758，试吃1.5，补空回私聊群管理，可生图"
+    },
+    {
+      "id": "p7",
+      "name": "即享",
+      "invite": "https://api.jixiangai.xyz/sign-up?aff=dJne",
+      "group": "付费站",
+      "tags": [
+        "试吃",
+        "抗截断"
+      ],
+      "note": "QQ群1104345974，试吃1，空回自动补，有免费分组，有抗截断"
+    },
+    {
+      "id": "p8",
+      "name": "16z",
+      "invite": "https://www.api16z.com/sign-up?aff=r3az",
+      "group": "付费站",
+      "tags": [
+        "试吃",
+        "生图",
+        "抗截断"
+      ],
+      "note": "QQ群135678103，试吃0.5，空回自动补，可生图，有抗截断"
+    },
+    {
+      "id": "p9",
+      "name": "电子蝴蝶",
+      "invite": "https://api.ebutterfly.cc/sign-up?aff=mHB7",
+      "group": "付费站",
+      "tags": [
+        "试吃",
+        "生图"
+      ],
+      "note": "QQ群1055643662，试吃1，自助补空回 https://refund.ebutterfly.cc，可生图"
+    },
+    {
+      "id": "p10",
+      "name": "小汐",
+      "invite": "https://faxiaoxi.yunimi.org/sign-up?aff=dcn5",
+      "group": "付费站",
+      "tags": [
+        "试吃不确定",
+        "抗截断"
+      ],
+      "note": "QQ群1057118805，试吃不确定，无自助补空回，有抗截断和薄甲模型"
+    },
+    {
+      "id": "p11",
+      "name": "刺猬",
+      "invite": "https://cc.cwapi.vip/sign-up?aff=0jlJ",
+      "group": "付费站",
+      "tags": [
+        "试吃不确定",
+        "生图"
+      ],
+      "note": "试吃不确定（1左右），可生图"
+    },
+    {
+      "id": "p12",
+      "name": "小黑小白汪",
+      "invite": "https://www.heibaiwoof.com/sign-up?aff=uyXx",
+      "group": "付费站",
+      "tags": [
+        "试吃",
+        "生图"
+      ],
+      "note": "QQ群1057441221，试吃2.5，可生图"
+    },
+    {
+      "id": "p13",
+      "name": "sillydream",
+      "invite": "http://154.29.148.56:12001/sign-up?aff=tgRr",
+      "group": "付费站",
+      "tags": [
+        "试吃",
+        "生图",
+        "抗截断"
+      ],
+      "note": "QQ群979990846，试吃16，可生图，有抗截断"
+    },
+    {
+      "id": "p14",
+      "name": "甜橙派",
+      "invite": "https://i.orangepie.org/sign-up?aff=FjIm",
+      "group": "付费站",
+      "tags": [
+        "试吃",
+        "生图"
+      ],
+      "note": "QQ群1101972626，试吃100，可生图。自助补空回：https://refund.orangepie.org/"
+    },
+    {
+      "id": "p15",
+      "name": "light hub",
+      "invite": "https://ly.ai3322.site/sign-up?aff=jwZE",
+      "group": "付费站",
+      "tags": [
+        "试吃",
+        "生图"
+      ],
+      "note": "试吃0.5，可生图，有福利分组"
+    },
+    {
+      "id": "p16",
+      "name": "Sora",
+      "invite": "https://api2.usora.net/sign-up?aff=LCQx",
+      "group": "付费站",
+      "tags": [
+        "试吃",
+        "生图"
+      ],
+      "note": "QQ群854380456，试吃2，找群内管理，自助补空回 https://tool.usora.net/，可生图"
+    },
+    {
+      "id": "p17",
+      "name": "EE",
+      "invite": "https://eeaihub.com/sign-up?aff=M3mQ",
+      "group": "付费站",
+      "tags": [
+        "试吃",
+        "生图",
+        "抗截断"
+      ],
+      "note": "QQ群123201338，试吃1.5，空回自动补，可生图，有抗截断和福利模型"
+    },
+    {
+      "id": "p18",
+      "name": "STA1N",
+      "invite": "https://cdn.sta1n.cn/",
+      "group": "付费站",
+      "tags": [
+        "抗截断"
+      ],
+      "note": "有抗截断和公益模型"
+    },
+    {
+      "id": "p19",
+      "name": "星河",
+      "invite": "https://ai.xingheai.cc/sign-up?aff=zu0J",
+      "group": "付费站",
+      "tags": [
+        "试吃",
+        "生图"
+      ],
+      "note": "QQ群906970283，试吃1.5，空回站内自助补，可生图，有福利分组"
+    },
+    {
+      "id": "p20",
+      "name": "EazyData",
+      "invite": "https://eazydata.org/sign-up?aff=Vp61",
+      "group": "付费站",
+      "tags": [
+        "试吃",
+        "生图"
+      ],
+      "note": "试吃50，可生图（需解锁）"
+    },
+    {
+      "id": "p21",
+      "name": "秋刀鱼",
+      "invite": "https://qiudaoy.com/sign-up?aff=uscR",
+      "group": "付费站",
+      "tags": [
+        "试吃"
+      ],
+      "note": "试吃0.5，自助补空回 https://billing.qiudaoy.com"
+    },
+    {
+      "id": "p23",
+      "name": "大米饭",
+      "invite": "https://damifan.xyz/sign-up?aff=xBxp",
+      "group": "付费站",
+      "tags": [
+        "试吃"
+      ],
+      "note": "QQ群1131492430，试吃2，自助补空回 https://damifan.xyz/refund"
+    },
+    {
+      "id": "p24",
+      "name": "ZHEXIU",
+      "invite": "https://77777777ai.com/register?aff=ZVPZFW3QJ9WV",
+      "group": "付费站",
+      "tags": [
+        "试吃不确定",
+        "生图"
+      ],
+      "note": "QQ群1121797229，试吃不确定，可生图"
+    },
+    {
+      "id": "p25",
+      "name": "SIX",
+      "invite": "https://api.sixai.cc/sign-up?aff=0RwA",
+      "group": "付费站",
+      "tags": [
+        "试吃",
+        "生图"
+      ],
+      "note": "试吃0.5（活动/赠送key处），可生图"
+    },
+    {
+      "id": "p26",
+      "name": "银杏",
+      "invite": "https://star.taikoapi.com/sign-up?aff=9etn",
+      "group": "付费站",
+      "tags": [
+        "试吃",
+        "生图",
+        "关闭注册"
+      ],
+      "note": "QQ群1047911746，试吃6，进群找管理再领5，可生图，注册关闭"
+    },
+    {
+      "id": "p28",
+      "name": "FluxA",
+      "invite": "https://fluxa.camila.qzz.io/sign-up?aff=Smpo",
+      "group": "付费站",
+      "tags": [
+        "无试吃",
+        "生图"
+      ],
+      "note": "QQ群651486387，无试吃，可生图"
+    },
+    {
+      "id": "p30",
+      "name": "星宇",
+      "invite": "https://xingyuapi.vip/sign-up?aff=HGU0",
+      "group": "付费站",
+      "tags": [
+        "试吃",
+        "生图",
+        "音频",
+        "视频"
+      ],
+      "note": "试吃0.05，可生图，gpt生图0.01/次，可音频，可视频"
+    },
+    {
+      "id": "p31",
+      "name": "蕾姆酒馆",
+      "invite": "https://remu.chat/signup?ref=3B0918C6",
+      "group": "付费站",
+      "tags": [
+        "试吃不确定",
+        "生图"
+      ],
+      "note": "试吃不确定，可生图"
+    },
+    {
+      "id": "p32",
+      "name": "良心",
+      "invite": "https://liangxinapi.top/sign-up?aff=OZBv",
+      "group": "付费站",
+      "tags": [
+        "试吃",
+        "生图"
+      ],
+      "note": "QQ群1108160671，试吃1，可生图，有福利分组"
+    },
+    {
+      "id": "p33",
+      "name": "小鱼",
+      "invite": "https://xyuai.me/register?code=NYBP5R",
+      "group": "付费站",
+      "tags": [
+        "试吃",
+        "生图"
+      ],
+      "note": "QQ群572764699，试吃3，可生图"
+    },
+    {
+      "id": "p34",
+      "name": "3DP token",
+      "invite": "https://token.3dpclub.com?ref=212954",
+      "group": "付费站",
+      "tags": [
+        "试吃"
+      ],
+      "note": "试吃0.5，国模为主"
+    },
+    {
+      "id": "p35",
+      "name": "茉莉",
+      "invite": "https://moliapi.com/register?aff=BbPA",
+      "group": "付费站",
+      "tags": [
+        "生图",
+        "视频"
+      ],
+      "note": "可生图，可视频"
+    },
+    {
+      "id": "p36",
+      "name": "Castorice",
+      "invite": "https://castorice.shop/sign-up?aff=IhmU",
+      "group": "付费站",
+      "tags": [
+        "无试吃"
+      ],
+      "note": "QQ群1125526683，无试吃"
+    },
+    {
+      "id": "s1",
+      "name": "玖时",
+      "invite": "https://api-cf.jiushi.xin/register?aff=ZLi1",
+      "group": "有签到",
+      "tags": [
+        "试吃",
+        "常用"
+      ],
+      "note": "QQ群1129915369，试吃1，空回站内自助补，有福利模型，常用"
+    },
+    {
+      "id": "s3",
+      "name": "织云",
+      "invite": "https://zhiyunapi.cc/register?aff=pBof",
+      "group": "有签到",
+      "tags": [
+        "试吃",
+        "生图",
+        "关闭注册",
+        "常用"
+      ],
+      "note": "QQ群575814584，试吃200，自助补空回 https://zhiyun.pro，可生图，注册关闭，常用"
+    },
+    {
+      "id": "s4",
+      "name": "大肘子",
+      "invite": "https://api.eppppp.top/sign-up?aff=YRX3",
+      "group": "有签到",
+      "tags": [
+        "试吃",
+        "生图",
+        "常用"
+      ],
+      "note": "QQ群874976996，试吃充1得2，可生图，签到额度三十天未用过期，有免费分组，常用"
+    },
+    {
+      "id": "s5",
+      "name": "舒芙蕾",
+      "invite": "https://shufulei.net/register?aff=0fHB",
+      "group": "有签到",
+      "tags": [
+        "无试吃",
+        "常用"
+      ],
+      "note": "QQ群733651536，无试吃，自助补空回 https://refund.shufulei.net，常用"
+    },
+    {
+      "id": "s6",
+      "name": "聚梦",
+      "invite": "https://api.jumengai.net/sign-up?aff=z3Tm",
+      "group": "有签到",
+      "tags": [
+        "试吃",
+        "生图",
+        "抗截断",
+        "常用"
+      ],
+      "note": "QQ群1130548941，试吃2r，空回站内自助补，可生图，签到最好不要开梯子，可能会签到0额度，有抗截断，常用"
+    },
+    {
+      "id": "s7",
+      "name": "青屿",
+      "invite": "https://qingyuapi.com/sign-up?aff=vgP4",
+      "group": "有签到",
+      "tags": [
+        "试吃",
+        "常用"
+      ],
+      "note": "QQ群1093759222，试吃进群找管理，有便宜按量，账号闲置30天会被清理，常用"
+    },
+    {
+      "id": "s8",
+      "name": "Nodex",
+      "invite": "https://nodexapi.it.com/sign-up?aff=z9Dj",
+      "group": "有签到",
+      "tags": [
+        "试吃",
+        "生图",
+        "常用"
+      ],
+      "note": "QQ群1109548416，试吃1，空回站内自助补，可生图，活动多，常用"
+    },
+    {
+      "id": "s10",
+      "name": "橘子汽水",
+      "invite": "https://juziqishui.net/register?aff=9n5B",
+      "group": "有签到",
+      "tags": [
+        "试吃不确定",
+        "常用"
+      ],
+      "note": "QQ群768944924，试吃不确定，空回找群精华，常用"
+    },
+    {
+      "id": "s13",
+      "name": "Noir",
+      "invite": "https://noir.blacknoir.cn/sign-up?aff=3QX6",
+      "group": "有签到",
+      "tags": [
+        "试吃",
+        "生图",
+        "抗截断",
+        "常用"
+      ],
+      "note": "QQ群1078507413，试吃2，自助补空回 https://credit.blacknoir.cn/，可生图，有抗截断，有破甲分组，11.11-11.12开放注册，常用"
+    },
+    {
+      "id": "s21",
+      "name": "梧桐小苑",
+      "invite": "https://api2.wtxiaoyuan.top/register?aff=QMie",
+      "group": "有签到",
+      "tags": [
+        "试吃",
+        "生图",
+        "常用"
+      ],
+      "note": "QQ群1130983062，试吃找群主，空回找群主，可生图，有福利和破甲分组，常用"
+    },
+    {
+      "id": "s22",
+      "name": "piu酱",
+      "invite": "https://piu.du4s.com/sign-up?aff=VMDZ",
+      "group": "有签到",
+      "tags": [
+        "试吃不确定",
+        "常用"
+      ],
+      "note": "QQ群813596309，试吃不确定，空回自动补，每周五充值有活动，有便宜模型，常用"
+    },
+    {
+      "id": "s2",
+      "name": "哈基米",
+      "invite": "https://gemai.huchan.cn/sign-up?aff=5gkc",
+      "group": "有签到",
+      "tags": [
+        "试吃不确定",
+        "生图",
+        "抗截断"
+      ],
+      "note": "试吃不确定，自助补空回 https://tool.gemai.cc，可生图，有抗截断"
+    },
+    {
+      "id": "s9",
+      "name": "Nova",
+      "invite": "https://once-cf.novai.su/sign-up?aff=99t1",
+      "group": "有签到",
+      "tags": [
+        "试吃不确定",
+        "生图"
+      ],
+      "note": "QQ群1083834781，试吃不确定，空回找群内管理，可生图，签到机制更新中暂不可用"
+    },
+    {
+      "id": "s11",
+      "name": "冻梨",
+      "invite": "https://api.dongli.work/sign-up?aff=RhHf",
+      "group": "有签到",
+      "tags": [
+        "试吃",
+        "生图"
+      ],
+      "note": "QQ群1056100669，试吃1，可生图"
+    },
+    {
+      "id": "s12",
+      "name": "星芽",
+      "invite": "https://xingya.site/sign-up?aff=FmcA",
+      "group": "有签到",
+      "tags": [
+        "试吃",
+        "生图"
+      ],
+      "note": "QQ群906445439，试吃进群找机器人，空回站内自助补，可生图，签到额度有专门分组，三十天过期，有福利分组"
+    },
+    {
+      "id": "s14",
+      "name": "信心花舍",
+      "invite": "https://xxhs.bgstudio.top/sign-up?aff=Hb1a",
+      "group": "有签到",
+      "tags": [
+        "试吃"
+      ],
+      "note": "QQ群1125960926，试吃2"
+    },
+    {
+      "id": "s15",
+      "name": "茉莉冰茶",
+      "invite": "http://b.molibingcha.xyz/sign-up?aff=12lB",
+      "group": "有签到",
+      "tags": [
+        "试吃不确定",
+        "生图",
+        "抗截断"
+      ],
+      "note": "QQ群1124806251（女群），试吃不确定，空回站内自助补，可生图，有抗截断，有福利折扣分组"
+    },
+    {
+      "id": "s16",
+      "name": "狸猫",
+      "invite": "https://limao-api.com/sign-up?aff=nqpz",
+      "group": "有签到",
+      "tags": [
+        "试吃不确定",
+        "生图",
+        "抗截断"
+      ],
+      "note": "QQ群1128305622，试吃不确定，空回站内使用日志处自助补，可生图，有抗截断"
+    },
+    {
+      "id": "s17",
+      "name": "长春叙",
+      "invite": "https://changchunxu.xyz/sign-up?aff=Yroa",
+      "group": "有签到",
+      "tags": [
+        "试吃",
+        "生图",
+        "音频"
+      ],
+      "note": "QQ群1126767120，试吃1，空回站内自助补，可生图，有破甲分组，有语音模型（MiniMax）"
+    },
+    {
+      "id": "s18",
+      "name": "润航算力",
+      "invite": "https://raivip.com/register?aff=BRhb",
+      "group": "有签到",
+      "tags": [
+        "生图",
+        "视频"
+      ],
+      "note": "可生图，可生视频，签到在个人中心处，有折扣分组"
+    },
+    {
+      "id": "s19",
+      "name": "Lane（421）",
+      "invite": "https://laneai.dev/user/login?invite=8ffb4342",
+      "group": "有签到",
+      "tags": [
+        "生图",
+        "视频"
+      ],
+      "note": "可生图，可生视频"
+    },
+    {
+      "id": "s20",
+      "name": "聚萌岛",
+      "invite": "https://jumengai.de5.net/sign-up?aff=oehi",
+      "group": "有签到",
+      "tags": [
+        "试吃",
+        "生图",
+        "抗截断"
+      ],
+      "note": "QQ群1130121738，试吃1，空回站内自助补，可生图，有抗截断，有活动分组"
+    },
+    {
+      "id": "s23",
+      "name": "VC",
+      "invite": "https://sub.vcnovb.cn/register?aff=7QAUC49EU8LW",
+      "group": "有签到",
+      "tags": [
+        "试吃",
+        "生图",
+        "视频"
+      ],
+      "note": "QQ群208422917，试吃5，可生图，可生视频，签到额度有专门分组可用国模和GPT，有福利分组"
+    },
+    {
+      "id": "s24",
+      "name": "zoo",
+      "invite": "https://zooapi.gfkfqtcx.com/sign-up?aff=eHbe",
+      "group": "有签到",
+      "tags": [
+        "试吃",
+        "生图"
+      ],
+      "note": "QQ群963359239，试吃0.5，空回自动补，可生图，有活动分组"
+    },
+    {
+      "id": "s25",
+      "name": "缘起",
+      "invite": "https://origin.nemodesk.top/sign-up?aff=sSoH",
+      "group": "有签到",
+      "tags": [
+        "试吃",
+        "生图"
+      ],
+      "note": "QQ群1135045040，试吃进群绑定领取，空回找群主，可生图，签到在右上角玉佩处，另外还可以玩小游戏获得额外额度，有国模特价分组"
+    },
+    {
+      "id": "s26",
+      "name": "ModelMq",
+      "invite": "https://modelmq.top/sign-up?aff=nRfS",
+      "group": "有签到",
+      "tags": [
+        "试吃",
+        "生图"
+      ],
+      "note": "QQ群1132731924，试吃1，找站长额外领，可生图"
+    },
+    {
+      "id": "s27",
+      "name": "白柚猫",
+      "invite": "https://api.baiyounico.xyz/sign-up?aff=ddz6",
+      "group": "有签到",
+      "tags": [],
+      "note": "QQ群730399614，有活动分组"
+    },
+    {
+      "id": "s28",
+      "name": "rua",
+      "invite": "https://api.rua.chat/sign-up?aff=69F7",
+      "group": "有签到",
+      "tags": [
+        "试吃",
+        "生图"
+      ],
+      "note": "QQ群，试吃在好事岛领，有折扣券和免费券（大约200次），空回站内自助补，可生图，签到与各种活动在好事岛，有薄甲系列，有活动分组"
+    },
+    {
+      "id": "s29",
+      "name": "南北绿豆",
+      "invite": "https://98ntl.com/sign-up?aff=wzSX",
+      "group": "有签到",
+      "tags": [
+        "试吃",
+        "生图"
+      ],
+      "note": "QQ群1131935290，试吃1，可生图，注册后被封号需要找群主解除"
+    },
+    {
+      "id": "s30",
+      "name": "stone",
+      "invite": "https://stoneapi.cn/sign-up?aff=blfZ",
+      "group": "有签到",
+      "tags": [
+        "试吃",
+        "生图",
+        "抗截断"
+      ],
+      "note": "QQ群973481167，试吃0.5，可生图，有抗截断，有活动分组"
+    },
+    {
+      "id": "s31",
+      "name": "初恋",
+      "invite": "https://api.hicode.me/sign-up?aff=Qchk",
+      "group": "有签到",
+      "tags": [
+        "试吃",
+        "生图",
+        "抗截断"
+      ],
+      "note": "QQ群1131932265，试吃60，可生图，有抗截断"
+    },
+    {
+      "id": "s32",
+      "name": "北执",
+      "invite": "https://beizhi.dedyn.io/sign-up?aff=XK9y",
+      "group": "有签到",
+      "tags": [
+        "试吃不确定",
+        "生图"
+      ],
+      "note": "QQ群1102159421，试吃不确定，可生图，公益站转付费站，便宜"
+    },
+    {
+      "id": "l5",
+      "name": "Passion",
+      "invite": "https://api.passionapi.com/register?aff=D238E393NWAU",
+      "group": "限制签到",
+      "tags": [
+        "试吃",
+        "生图",
+        "常用"
+      ],
+      "note": "QQ群1026294886，试吃进群找管理员，空回站内自助补（使用记录里，见群），可生图，累计消费或累计充值达标后开启签到，签到要求当日调用次数，周六日无签到要求，有福利分组，常用"
+    },
+    {
+      "id": "l7",
+      "name": "星桥",
+      "invite": "https://xingqiao.chat/sign-up?aff=WZxx",
+      "group": "限制签到",
+      "tags": [
+        "试吃不确定",
+        "抗截断",
+        "常用"
+      ],
+      "note": "公益站转付费站，便宜，试吃不确定，签到要求昨日调用次数，有抗截断，只有Gemini，常用"
+    },
+    {
+      "id": "l15",
+      "name": "星期五",
+      "invite": "https://api.fri5.top/sign-up?aff=EExf",
+      "group": "限制签到",
+      "tags": [
+        "试吃",
+        "生图",
+        "抗截断",
+        "常用"
+      ],
+      "note": "QQ群1029546720，试吃2.8，通过邀请链接注册首充赠送2，空回自动补，可生图，未付费签到额度有使用期限，累计充值5r开启长期签到（0.2～0.4），每周五充值八折，有抗截断，常用"
+    },
+    {
+      "id": "l1",
+      "name": "幸运午餐",
+      "invite": "https://luckylunch.me/register?aff=dDqs",
+      "group": "限制签到",
+      "tags": [
+        "无试吃",
+        "生图"
+      ],
+      "note": "QQ群1015605363，无试吃，可生图，签到要求昨日调用额度，有活动分组"
+    },
+    {
+      "id": "l2",
+      "name": "好梦",
+      "invite": "https://goodreamapi.online/register?aff=gCPo",
+      "group": "限制签到",
+      "tags": [
+        "无试吃",
+        "生图",
+        "抗截断"
+      ],
+      "note": "QQ群1057209838，无试吃，空回站内自助补，可生图，签到要求昨日调用额度，有抗截断，有限时特价分组"
+    },
+    {
+      "id": "l3",
+      "name": "宅恋",
+      "invite": "https://az.zlapi.vip/register?aff=9JKk",
+      "group": "限制签到",
+      "tags": [
+        "试吃",
+        "生图"
+      ],
+      "note": "QQ群1092334416，试吃1，空回站内自助补，可生图，签到要求昨日调用次数或额度，有免费分组"
+    },
+    {
+      "id": "l4",
+      "name": "奇异果",
+      "invite": "https://www.qiyiguo.uk/sign-up?aff=YXkq",
+      "group": "限制签到",
+      "tags": [
+        "试吃",
+        "生图"
+      ],
+      "note": "QQ群1014175105，试吃进群找机器人，自助补空回 https://kh.qiyiguo.uk/，可生图，签到要求昨日调用次数或金额：https://api.qiyiguo.uk/wheel/"
+    },
+    {
+      "id": "l6",
+      "name": "狐狐promax",
+      "invite": "https://api3.neonfox.top/sign-up?aff=FiFg",
+      "group": "限制签到",
+      "tags": [
+        "试吃不确定"
+      ],
+      "note": "QQ群646146103，试吃不确定，充值0.03后开启签到，签到要求昨日调用次数，签到额度七天过期，有福利分组"
+    },
+    {
+      "id": "l8",
+      "name": "ovo",
+      "invite": "https://hk.ovoapi.cn/sign-up?aff=fJNP",
+      "group": "限制签到",
+      "tags": [
+        "试吃",
+        "生图"
+      ],
+      "note": "QQ群481778034，试吃2，空回站内自助补，可生图，签到额度为昨日消费按比例返利"
+    },
+    {
+      "id": "l9",
+      "name": "酒栈",
+      "invite": "https://api.jiuzhan.top/sign-up?aff=DDIg",
+      "group": "限制签到",
+      "tags": [
+        "试吃",
+        "生图"
+      ],
+      "note": "QQ群1071566452，试吃2，可生图，签到要求昨日调用次数"
+    },
+    {
+      "id": "l10",
+      "name": "月栖",
+      "invite": "https://yueqiai.top/sign-up?aff=2NM1",
+      "group": "限制签到",
+      "tags": [
+        "试吃",
+        "生图"
+      ],
+      "note": "QQ群991569042，试吃1.5，自助补空回 https://yueqiai.top/compensate，可生图，签到要求昨日调用次数，有打折分组（丘比特）"
+    },
+    {
+      "id": "l11",
+      "name": "晚晚舟",
+      "invite": "https://wanwanzhou.top/register?aff=SAU5CQKFLXCE",
+      "group": "限制签到",
+      "tags": [
+        "试吃不确定",
+        "抗截断"
+      ],
+      "note": "QQ群782298056（女群），试吃不确定，累计邀请10人或充值20r后开启签到，便宜，有抗截断，有活动分组（活动模型禁止破甲）"
+    },
+    {
+      "id": "l12",
+      "name": "玖观",
+      "invite": "https://jiuguan.cloud/sign-up?aff=Z5e4",
+      "group": "限制签到",
+      "tags": [
+        "试吃",
+        "抗截断"
+      ],
+      "note": "QQ群498648355，试吃3，空回站内自助补，累计充值10r后开启签到，有抗截断，有活动分组"
+    },
+    {
+      "id": "l13",
+      "name": "慧慧云",
+      "invite": "https://api.huihuiyun.top/register?aff=7JXJ4EWYLGD5",
+      "group": "限制签到",
+      "tags": [
+        "试吃不确定"
+      ],
+      "note": "QQ群1107808752，试吃不确定，累计邀请5人或充值10r后开启签到，有公益组、特惠组、法王分组和薄甲分组"
+    },
+    {
+      "id": "l14",
+      "name": "Tree",
+      "invite": "https://api.treegpt.cc/",
+      "group": "限制签到",
+      "tags": [
+        "需邀请码"
+      ],
+      "note": "注册需要邀请码，未付费只能使用国模，累计充值25r后开启全部分组（不包含额度），未付费账号闲置15天将被清理，偶尔会发额度红包，可签到，有低价特价分组"
+    },
+    {
+      "id": "g2",
+      "name": "Charity",
+      "invite": "https://free.camila.qzz.io/sign-up?aff=kKbr",
+      "group": "公益站",
+      "tags": [
+        "生图",
+        "常用"
+      ],
+      "note": "QQ群1075843736，FluxA站的公益站，可生图，常用"
+    },
+    {
+      "id": "g1",
+      "name": "Cat",
+      "invite": "https://api.catcat.top/sign-up?aff=uKyh",
+      "group": "公益站",
+      "tags": [
+        "生图",
+        "关闭注册"
+      ],
+      "note": "QQ群523581328，可生图，无充值入口，注册关闭"
+    },
+    {
+      "id": "g3",
+      "name": "Share LLM",
+      "invite": "https://sharellm.net/sign-up?aff=ao4M",
+      "group": "公益站",
+      "tags": [
+        "生图"
+      ],
+      "note": "QQ群1074668087，可生图，在令牌管理处创建密钥，令牌路由处查看模型"
+    },
+    {
+      "id": "g4",
+      "name": "初叶",
+      "invite": "https://ai.chuyel.top/register?aff=iff5",
+      "group": "公益站",
+      "tags": [
+        "生图"
+      ],
+      "note": "可生图"
+    },
+    {
+      "id": "g5",
+      "name": "启源星",
+      "invite": "https://chuan.sylu.cc/sign-up?aff=q0Yz",
+      "group": "公益站",
+      "tags": [
+        "生图"
+      ],
+      "note": "QQ群1031713378，GitHub注册，无充值入口，可生图"
+    },
+    {
+      "id": "g6",
+      "name": "肖恩",
+      "invite": "https://go.toter.me/register?code=5JHEUT",
+      "group": "公益站",
+      "tags": [],
+      "note": "签到额度每日刷新，站内消息处有时会送额度，额度很多但是很笨掺很多，可作副站使用"
+    },
+    {
+      "id": "i3",
+      "name": "深焙",
+      "invite": "https://deeproast.sryze.cc/login?invite=v1YT5yWk",
+      "group": "生图站",
+      "tags": [
+        "试吃",
+        "生图",
+        "常用"
+      ],
+      "note": "试吃30积分，每日签到20积分，生图5～8积分/张，邀请双方有奖励，三天未使用会被清理，需6.66r保号，常用"
+    },
+    {
+      "id": "i1",
+      "name": "蛋糕生图",
+      "invite": "https://dangao.iisbo.com/auth?invite=NXZDWGZC",
+      "group": "生图站",
+      "tags": [
+        "试吃"
+      ],
+      "note": "QQ群621823337，试吃5点，无签到"
+    },
+    {
+      "id": "i2",
+      "name": "图灵画境（面包狗）",
+      "invite": "https://breadog.cn/",
+      "group": "生图站",
+      "tags": [
+        "无试吃",
+        "生图"
+      ],
+      "note": "无试吃，无签到"
+    },
+    {
+      "id": "i4",
+      "name": "Clodeson",
+      "invite": "https://pai.zaiduyu.top/#/auth?ref=49E5A8FD97B5",
+      "group": "生图站",
+      "tags": [
+        "生图"
+      ],
+      "note": "无API接入口，新用户赠送1200永久积分及5000限时积分，每日签到500+当天限时积分，生图100积分/张（GPT2，模型不同积分不同）"
+    }
+  ]
+}
