@@ -7,30 +7,18 @@ let REGISTRY = { notice: [], contact: {}, presetGroups: [], presetTags: [], site
 
 function defaultSettings() {
   return {
-    theme: "morandi",
-    wallpaper: { type: "none", value: "", opacity: 0.82 },
-    appName: "API小仓库",
-    proxyUrl: "", 
+    theme: "morandi", wallpaper: { type: "none", value: "", opacity: 0.82 },
+    appName: "API小仓库", proxyUrl: "", 
     groups: ["付费站", "公益站", "有签到", "限制签到", "生图站"],
     tags: ["试吃", "无试吃", "试吃不确定", "需邀请码", "关闭注册", "生图", "视频", "音频", "抗截断", "常用"],
-    sortMode: "custom",
-    collapsedGroups: [],
-    filterCollapsed: true,
-    regFilterCollapsed: true,
-    modelFilterCollapsed: true
+    sortMode: "custom", collapsedGroups: [], filterCollapsed: true, regFilterCollapsed: true, modelFilterCollapsed: true
   };
 }
 
 const store = {
   getSites() { try { return JSON.parse(localStorage.getItem(KEY_SITES) || "[]"); } catch { return []; } },
   saveSites(sites) { localStorage.setItem(KEY_SITES, JSON.stringify(sites)); },
-  getSettings() {
-    try {
-      const s = JSON.parse(localStorage.getItem(KEY_SETTINGS) || "null");
-      if (!s) return defaultSettings();
-      return Object.assign(defaultSettings(), s);
-    } catch { return defaultSettings(); }
-  },
+  getSettings() { try { const s = JSON.parse(localStorage.getItem(KEY_SETTINGS) || "null"); return s ? Object.assign(defaultSettings(), s) : defaultSettings(); } catch { return defaultSettings(); } },
   saveSettings(s) { localStorage.setItem(KEY_SETTINGS, JSON.stringify(s)); },
   getPrices() { try { return JSON.parse(localStorage.getItem(KEY_PRICES) || "[]"); } catch { return []; } },
   savePrices(prices) { localStorage.setItem(KEY_PRICES, JSON.stringify(prices)); },
@@ -39,27 +27,15 @@ const store = {
 };
 
 const state = {
-  sites: [],
-  settings: defaultSettings(),
-  modelPrices: [],
-  currentTab: "warehouse",
-  filterGroup: "all",
-  filterTags: [],
-  search: "",
-  modelSearch: "",
-  providerFilter: [],
-  priceTypeFilter: [],
-  siteFilter: [],
-  regFilterGroup: "all",
-  regFilterTags: [],
-  regCollapsed: []
+  sites: [], settings: defaultSettings(), modelPrices: [], currentTab: "warehouse",
+  filterGroup: "all", filterTags: [], search: "", modelSearch: "",
+  providerFilter: [], priceTypeFilter: [], siteFilter: [],
+  regFilterGroup: "all", regFilterTags: [], regCollapsed: [],
+  selectedMyIds: new Set(), selectedRegIds: new Set()
 };
 
 function uid() { return "s_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
-function todayStr() {
-  const d = new Date(); const p = n => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
-}
+function todayStr() { const d = new Date(); const p = n => String(n).padStart(2, "0"); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`; }
 function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
 function linkify(text) {
   if (!text) return "";
@@ -78,54 +54,23 @@ function linkify(text) {
 }
 
 async function init() {
-  try {
-    const res = await fetch('./registry.json');
-    if (res.ok) REGISTRY = await res.json();
-  } catch (err) {}
-
-  state.settings = store.getSettings();
-  state.sites = store.getSites();
-  state.modelPrices = store.getPrices();
-
+  try { const res = await fetch('./registry.json'); if (res.ok) REGISTRY = await res.json(); } catch (err) {}
+  state.settings = store.getSettings(); state.sites = store.getSites(); state.modelPrices = store.getPrices();
   const today = todayStr(); let changed = false;
-  state.sites.forEach(s => {
-    if (s.todayCheckedIn && s.lastCheckinDate !== today) { s.todayCheckedIn = false; changed = true; }
-  });
+  state.sites.forEach(s => { if (s.todayCheckedIn && s.lastCheckinDate !== today) { s.todayCheckedIn = false; changed = true; } });
   if (changed) store.saveSites(state.sites);
 
   applyTheme(); applyWallpaper();
-  renderGroupFilter(); renderTagFilter(); renderList(); renderRegistry(); 
-  
-  try {
-    renderModelList();
-  } catch(e) {
-    console.warn("本地模型数据格式过旧，已清理缓存。", e);
-    state.modelPrices = [];
-    store.savePrices([]);
-    renderModelList();
-  }
-  
+  renderGroupFilter(); renderTagFilter(); renderList(); renderRegistry(); renderModelList();
   updateFilterUI(); updateRegFilterUI(); updateModelFilterUI(); bindEvents();
-  updateNoticeBadge(); // 初始化红点
+  updateNoticeBadge();
 }
 
 function updateNoticeBadge() {
-  const readList = store.getReadNotices();
-  let unreadCount = 0;
-  (REGISTRY.notice || []).forEach(n => {
-    const id = n.date + "_" + n.title;
-    if (!readList.includes(id)) unreadCount++;
-  });
-  
+  const readList = store.getReadNotices(); let unreadCount = 0;
+  (REGISTRY.notice || []).forEach(n => { if (!readList.includes(n.date + "_" + n.title)) unreadCount++; });
   const badge = document.getElementById("noticeBadge");
-  if (badge) {
-    if (unreadCount > 0) {
-      badge.textContent = unreadCount;
-      badge.style.display = "inline-block";
-    } else {
-      badge.style.display = "none";
-    }
-  }
+  if (badge) { if (unreadCount > 0) { badge.textContent = unreadCount; badge.style.display = "inline-block"; } else { badge.style.display = "none"; } }
 }
 
 function applyTheme() { document.documentElement.setAttribute("data-theme", state.settings.theme === "mono" ? "mono" : "morandi"); }
@@ -160,7 +105,6 @@ function updateModelFilterUI() { const c = document.getElementById("modelFilterC
 
 function renderGroupFilter() {
   const wrap = document.getElementById("groupFilter");
-  if(!wrap) return;
   const chips = [`<span class="chip ${state.filterGroup === "all" ? "active" : ""}" data-group="all">全部</span>`];
   state.settings.groups.forEach(g => chips.push(`<span class="chip ${state.filterGroup === g ? "active" : ""}" data-group="${esc(g)}">${esc(g)}</span>`));
   wrap.innerHTML = chips.join("");
@@ -168,7 +112,6 @@ function renderGroupFilter() {
 }
 function renderTagFilter() {
   const wrap = document.getElementById("tagFilter");
-  if(!wrap) return;
   wrap.innerHTML = state.settings.tags.map(t => `<span class="chip ${state.filterTags.includes(t) ? "active" : ""}" data-tag="${esc(t)}">${esc(t)}</span>`).join("");
   wrap.querySelectorAll(".chip").forEach(c => { c.onclick = () => { const t = c.dataset.tag; const i = state.filterTags.indexOf(t); if (i >= 0) state.filterTags.splice(i, 1); else state.filterTags.push(t); renderTagFilter(); renderList(); }; });
 }
@@ -199,7 +142,6 @@ function sortSites(arr) {
 
 function renderList() {
   const wrap = document.getElementById("siteList");
-  if(!wrap) return;
   const all = getFilteredSites();
   if (!all.length) { wrap.innerHTML = `<div class="empty">没有匹配的站点</div>`; return; }
   const groups = [...state.settings.groups];
@@ -231,32 +173,33 @@ function renderList() {
     card.querySelector('[data-act="edit"]')?.addEventListener("click", () => openSiteForm(id));
     card.querySelector('[data-act="delete"]')?.addEventListener("click", () => deleteSite(id));
     card.querySelector('[data-act="fetchBalance"]')?.addEventListener("click", () => fetchBalance(id));
+    card.querySelector('.checkbox')?.addEventListener("change", (e) => toggleMySelect(id, e.target.checked));
   });
+  updateBatchBar();
 }
 
 function balanceText(s) {
-  let mainAmount = s.balance || "未记录";
-  let subAmount = "";
-  
+  let mainAmount = s.balance || "未记录"; let subAmount = "";
   if (s.balance && s.quotaPerUnit && s.currency) {
     const n = parseFloat(s.balance);
-    if (!isNaN(n) && s.quotaPerUnit > 0) {
-      mainAmount = (n / s.quotaPerUnit).toFixed(2) + " " + s.currency;
-      subAmount = ` (原始: ${s.balance})`;
-    }
+    if (!isNaN(n) && s.quotaPerUnit > 0) { mainAmount = (n / s.quotaPerUnit).toFixed(2) + " " + s.currency; subAmount = ` (原始: ${s.balance})`; }
   }
-  
   const btn = s.siteType === "manual" ? "" : `<button class="mini-btn" data-act="fetchBalance" style="padding:2px 5px; font-size:11px; margin-left:4px;">↻</button>`;
-  
   return `<span class="balance">余额 <b>${esc(mainAmount)}</b><span style="font-size:11px;color:#999">${esc(subAmount)}</span>${btn}</span>`;
 }
 function cardHTML(s) {
   const tags = (s.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join("");
   const checkinBtn = s.hasCheckin ? `<button class="mini-btn ${s.todayCheckedIn ? "done" : ""}" data-act="checkin">${s.todayCheckedIn ? "今日已签" : "标记签到"}</button>` : "";
-  return `<div class="card ${(s.tags || []).includes("常用") ? "pinned" : ""}" data-id="${esc(s.id)}">
+  const checked = state.selectedMyIds.has(s.id) ? "checked" : "";
+  return `<div class="card ${(s.tags || []).includes("常用") ? "pinned" : ""} ${checked ? "selected" : ""}" data-id="${esc(s.id)}">
     <div class="card-top">
       <div class="card-name">${(s.tags || []).includes("常用") ? '<span class="pin">☆</span>' : ""}${esc(s.name)}</div>
-      <div class="card-actions">${checkinBtn}<button class="mini-btn" data-act="copy">复制</button><button class="mini-btn" data-act="open">打开</button></div>
+      <div class="card-actions">
+        ${checkinBtn}
+        <button class="mini-btn" data-act="copy">复制</button>
+        <button class="mini-btn" data-act="open">打开</button>
+        <input type="checkbox" class="checkbox" ${checked}>
+      </div>
     </div>
     <div class="card-meta" style="margin-top:8px;"><span>${esc(s.group || "")}</span> ${balanceText(s)}</div>
     ${tags ? `<div class="card-tags">${tags}</div>` : ""}
@@ -269,151 +212,258 @@ function openSite(id) { const s = state.sites.find(x => x.id === id); if (!s) re
 function toggleCheckin(id) { const s = state.sites.find(x => x.id === id); if (!s) return; s.todayCheckedIn = !s.todayCheckedIn; if (s.todayCheckedIn) s.lastCheckinDate = todayStr(); store.saveSites(state.sites); renderList(); toast(s.todayCheckedIn ? "已标记今日签到" : "已取消签到标记"); }
 function copyInvite(id) { const s = state.sites.find(x => x.id === id); if (!s) return; const text = s.invite || s.mainUrl || ""; if (navigator.clipboard?.writeText) { navigator.clipboard.writeText(text).then(() => toast("已复制链接")).catch(() => fallbackCopy(text)); } else fallbackCopy(text); }
 function fallbackCopy(text) { const ta = document.createElement("textarea"); ta.value = text; document.body.appendChild(ta); ta.select(); try { document.execCommand("copy"); toast("已复制链接"); } catch { toast("复制失败"); } document.body.removeChild(ta); }
-function deleteSite(id) { const s = state.sites.find(x => x.id === id); if (!s) return; if (!confirm(`确定删除「${s.name}」？`)) return; state.sites = state.sites.filter(x => x.id !== id); store.saveSites(state.sites); renderList(); toast("已删除"); }
+function deleteSite(id) { const s = state.sites.find(x => x.id === id); if (!s) return; if (!confirm(`确定删除「${s.name}」？`)) return; state.sites = state.sites.filter(x => x.id !== id); state.selectedMyIds.delete(id); store.saveSites(state.sites); renderList(); toast("已删除"); }
 
-/* ====== 核心：带代理的请求与多平台余额解析 ====== */
+/* ====== 多选与批量操作逻辑 ====== */
+function toggleMySelect(id, isChecked) {
+  if (isChecked) state.selectedMyIds.add(id); else state.selectedMyIds.delete(id);
+  renderList();
+}
+
+document.getElementById("btnSelectAllMy").onclick = () => {
+  const visibleSites = getFilteredSites();
+  if (visibleSites.length === 0) return;
+  const allSelected = visibleSites.every(s => state.selectedMyIds.has(s.id));
+  visibleSites.forEach(s => {
+    if (allSelected) state.selectedMyIds.delete(s.id);
+    else state.selectedMyIds.add(s.id);
+  });
+  renderList();
+};
+
+document.getElementById("btnClearSel").onclick = () => { state.selectedMyIds.clear(); renderList(); };
+
+function updateBatchBar() {
+  const bar = document.getElementById("batchBar");
+  const count = state.selectedMyIds.size;
+  document.getElementById("selCount").textContent = count;
+  if (count > 0) bar.classList.add("show"); else bar.classList.remove("show");
+}
+
+document.getElementById("btnOpenBatch").onclick = () => {
+  const groups = state.settings.groups.map(g => `<option value="${esc(g)}">${esc(g)}</option>`).join("");
+  const tags = state.settings.tags.map(t => `<option value="${esc(t)}">${esc(t)}</option>`).join("");
+  showModal(`
+    <h3>批量操作 (已选 ${state.selectedMyIds.size} 项)</h3>
+    <div class="field"><label>更换分组</label><select id="b-group"><option value="">-- 不修改 --</option>${groups}</select></div>
+    <div class="field"><label>更换标签</label><select id="b-tag"><option value="">-- 不修改 --</option>${tags}</select>
+      <label class="check-row"><input type="checkbox" id="b-keepTags"> 保留原有标签（不勾选则覆盖）</label>
+    </div>
+    <div class="field"><label>签到状态</label>
+      <select id="b-checkin"><option value="">-- 不修改 --</option><option value="yes">标记为：有签到</option><option value="no">标记为：无签到</option><option value="done">标记为：今日已签</option></select>
+    </div>
+    <div class="btn-row" style="margin-top:20px;">
+      <button class="btn" id="b-copy">复制选中邀请链接</button>
+      <button class="btn primary" id="b-apply">确认应用</button>
+    </div>
+  `);
+  
+  document.getElementById("b-copy").onclick = () => {
+    let text = "";
+    state.sites.forEach(s => {
+      if (state.selectedMyIds.has(s.id)) {
+        const link = s.shareLink || s.invite || s.mainUrl;
+        if(link) text += `【${s.name}】\n${link}\n\n`;
+      }
+    });
+    if(!text) return toast("选中站点没有填写链接");
+    navigator.clipboard.writeText(text.trim()).then(() => {
+      toast("已复制选中站点的邀请链接！"); closeModal(); state.selectedMyIds.clear(); renderList();
+    }).catch(() => fallbackCopy(text));
+  };
+
+  document.getElementById("b-apply").onclick = () => {
+    const g = document.getElementById("b-group").value;
+    const t = document.getElementById("b-tag").value;
+    const keep = document.getElementById("b-keepTags").checked;
+    const c = document.getElementById("b-checkin").value;
+
+    state.sites.forEach(s => {
+      if (!state.selectedMyIds.has(s.id)) return;
+      if (g) s.group = g;
+      if (t) { if (keep) { if (!s.tags.includes(t)) s.tags.push(t); } else { s.tags = [t]; } }
+      if (c === "yes") s.hasCheckin = true;
+      if (c === "no") s.hasCheckin = false;
+      if (c === "done") { s.hasCheckin = true; s.todayCheckedIn = true; s.lastCheckinDate = todayStr(); }
+    });
+    store.saveSites(state.sites); closeModal(); state.selectedMyIds.clear(); renderList(); toast("批量应用完成");
+  };
+};
+
+/* ====== 核心：拉取逻辑 ====== */
 async function fetchWithProxy(url, options = {}) {
   const proxy = state.settings.proxyUrl;
-  if (proxy) {
-    const target = encodeURIComponent(url);
-    return fetch(`${proxy}?target=${target}`, options);
-  }
+  if (proxy) { return fetch(`${proxy}?target=${encodeURIComponent(url)}`, options); }
   return fetch(url, options);
 }
 
 async function fetchBalance(id) {
-  const s = state.sites.find(x => x.id === id);
-  if (!s) return;
-  
+  const s = state.sites.find(x => x.id === id); if (!s) return;
   const type = s.siteType || "newapi";
   if (type === "manual") return toast("该站点设置为手动模式，请直接编辑填写");
   if (!s.apiEndpoint) return toast("请先在「编辑」中填写 API 端点");
   if (!s.accessToken) return toast("请先在「编辑」中填写 访问令牌");
-
   toast("正在拉取余额...");
   try {
-    let url = s.apiEndpoint.replace(/\/+$/, "");
-    let headers = { "Authorization": "Bearer " + s.accessToken };
-    
-    if (type === "newapi") {
-      url += "/api/user/self";
-      if (s.userId) headers["New-Api-User"] = s.userId;
-    } else if (type === "sub2api") {
-      url += "/api/v1/auth/me";
-    } else if (type === "deepseek") {
-      url += "/user/balance";
-    } else if (type === "siliconflow") {
-      url += "/v1/user/info";
-    }
-
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 8000);
-    const res = await fetchWithProxy(url, { headers, signal: controller.signal });
-    clearTimeout(timeoutId);
-
+    let url = s.apiEndpoint.replace(/\/+$/, ""); let headers = { "Authorization": "Bearer " + s.accessToken };
+    if (type === "newapi") { url += "/api/user/self"; if (s.userId) headers["New-Api-User"] = s.userId; }
+    else if (type === "sub2api") { url += "/api/v1/auth/me"; }
+    else if (type === "deepseek") { url += "/user/balance"; }
+    else if (type === "siliconflow") { url += "/v1/user/info"; }
+    const controller = new AbortController(); const timeoutId = setTimeout(() => controller.abort(), 8000);
+    const res = await fetchWithProxy(url, { headers, signal: controller.signal }); clearTimeout(timeoutId);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = await res.json();
-    let newBalance = "";
-
-    if (type === "newapi") {
-      if (data && data.data && data.data.quota !== undefined) newBalance = String(data.data.quota);
-    } else if (type === "sub2api") {
-      if (data && data.data && data.data.quota !== undefined) newBalance = String(data.data.quota);
-      else if (data && data.quota !== undefined) newBalance = String(data.quota);
-    } else if (type === "deepseek") {
-      if (data && data.balance_infos && data.balance_infos.length > 0) {
-        newBalance = data.balance_infos[0].total_balance;
-      }
-    } else if (type === "siliconflow") {
-      if (data && data.data && data.data.totalBalance !== undefined) newBalance = String(data.data.totalBalance);
-      else if (data && data.totalBalance !== undefined) newBalance = String(data.totalBalance);
-    }
-
-    if (newBalance !== "") {
-      s.balance = newBalance;
-      store.saveSites(state.sites);
-      renderList();
-      toast("余额已成功更新");
-    } else {
-      throw new Error("未找到余额字段");
-    }
-  } catch (err) {
-    console.error(err);
-    toast("拉取失败！请先检查是否开启了网络代理，或检查你的 Worker 代理是否正常。也可以直接去站点手动查看并填写余额。");
-  }
+    const data = await res.json(); let newBalance = "";
+    if (type === "newapi") { if (data?.data?.quota !== undefined) newBalance = String(data.data.quota); }
+    else if (type === "sub2api") { if (data?.data?.quota !== undefined) newBalance = String(data.data.quota); else if (data?.quota !== undefined) newBalance = String(data.quota); }
+    else if (type === "deepseek") { if (data?.balance_infos?.length > 0) newBalance = data.balance_infos[0].total_balance; }
+    else if (type === "siliconflow") { if (data?.data?.totalBalance !== undefined) newBalance = String(data.data.totalBalance); else if (data?.totalBalance !== undefined) newBalance = String(data.totalBalance); }
+    if (newBalance !== "") { s.balance = newBalance; store.saveSites(state.sites); renderList(); toast("余额已成功更新"); }
+    else throw new Error("未找到余额字段");
+  } catch (err) { console.error(err); toast("拉取失败！请先检查是否开启了网络代理，或检查你的 Worker 代理是否正常。也可以直接去站点手动查看并填写余额。"); }
 }
 
 function openSiteForm(id) {
   const editing = id ? state.sites.find(x => x.id === id) : null;
-  const s = editing || { 
-    name: "", invite: "", group: state.settings.groups[0] || "付费站", 
-    tags: [], note: "", hasCheckin: false, todayCheckedIn: false, lastCheckinDate: "", 
-    balance: "", quotaPerUnit: "500000", currency: "CNY", 
-    apiEndpoint: "", siteType: "newapi", accessToken: "", userId: "", modelRatio: "1" 
-  };
+  const s = editing || { name: "", invite: "", shareLink: "", group: state.settings.groups[0] || "付费站", tags: [], note: "", hasCheckin: false, todayCheckedIn: false, lastCheckinDate: "", balance: "", quotaPerUnit: "500000", currency: "CNY", apiEndpoint: "", siteType: "newapi", accessToken: "", userId: "", modelRatio: "1" };
   const tagPicker = state.settings.tags.map(t => `<span class="chip ${(s.tags || []).includes(t) ? "active" : ""}" data-tag="${esc(t)}">${esc(t)}</span>`).join("");
   
   showModal(`
     <h3>${editing ? "编辑站点" : "添加站点"}</h3>
     <div class="field"><label>站名 *</label><input id="f-name" value="${esc(s.name)}"></div>
-    <div class="field"><label>链接 *</label><input id="f-invite" value="${esc(s.invite)}" placeholder="比如签到页或注册链接"></div>
+    <div class="field"><label>主链接 *</label><input id="f-invite" value="${esc(s.invite)}" placeholder="用于自己跳转（首页或签到页）"></div>
+    <div class="field"><label>分享邀请链接（可选）</label><input id="f-shareLink" value="${esc(s.shareLink||'')}" placeholder="用于批量复制分享给别人"></div>
     <div class="field"><label>分组</label><input id="f-group" value="${esc(s.group)}" list="groupList"><datalist id="groupList">${state.settings.groups.map(g => `<option value="${esc(g)}">`).join("")}</datalist></div>
     <div class="field"><label>标签（可多选）</label><div class="tag-picker" id="tagPicker">${tagPicker}</div></div>
     <div class="field"><label>备注</label><textarea id="f-note">${esc(s.note)}</textarea></div>
     <div class="field"><label>是否有签到</label><select id="f-hasCheckin"><option value="0" ${!s.hasCheckin ? "selected" : ""}>否</option><option value="1" ${s.hasCheckin ? "selected" : ""}>是</option></select></div>
-    
-    <div class="field"><label>站点架构类型（用于拉取余额）</label>
-      <select id="f-siteType">
-        <option value="newapi" ${s.siteType === "newapi" ? "selected" : ""}>New API 体系（大部分中转站）</option>
-        <option value="sub2api" ${s.siteType === "sub2api" ? "selected" : ""}>Sub2API 体系</option>
-        <option value="deepseek" ${s.siteType === "deepseek" ? "selected" : ""}>DeepSeek 官方</option>
-        <option value="siliconflow" ${s.siteType === "siliconflow" ? "selected" : ""}>硅基流动 SiliconFlow</option>
-        <option value="manual" ${s.siteType === "manual" ? "selected" : ""}>仅手动记录（不拉取）</option>
-      </select>
-    </div>
-    <div class="field"><label>API 端点（用于拉取余额和模型价格）</label><input id="f-api" value="${esc(s.apiEndpoint)}" placeholder="如 https://api.xxx.com"></div>
-    <div class="field"><label>访问令牌（用于自动拉取余额）</label><input id="f-token" value="${esc(s.accessToken)}" placeholder="系统访问令牌"></div>
-    <div class="field"><label>用户 ID（仅 New API 需要，可选）</label><input id="f-uid" value="${esc(s.userId)}"></div>
-
+    <div class="field"><label>站点架构类型（用于拉取余额）</label><select id="f-siteType"><option value="newapi" ${s.siteType === "newapi" ? "selected" : ""}>New API 体系</option><option value="sub2api" ${s.siteType === "sub2api" ? "selected" : ""}>Sub2API 体系</option><option value="deepseek" ${s.siteType === "deepseek" ? "selected" : ""}>DeepSeek 官方</option><option value="siliconflow" ${s.siteType === "siliconflow" ? "selected" : ""}>硅基流动</option><option value="manual" ${s.siteType === "manual" ? "selected" : ""}>仅手动记录</option></select></div>
+    <div class="field"><label>API 端点</label><input id="f-api" value="${esc(s.apiEndpoint)}" placeholder="如 https://api.xxx.com"></div>
+    <div class="field"><label>访问令牌</label><input id="f-token" value="${esc(s.accessToken)}" placeholder="系统访问令牌"></div>
+    <div class="field"><label>用户 ID (New API需要)</label><input id="f-uid" value="${esc(s.userId)}"></div>
     <div class="field"><label>余额</label><input id="f-balance" value="${esc(s.balance)}" placeholder="可手填，也可点刷新自动拉取"></div>
     <div class="field"><label>换算比例（1额度＝？quota）</label><input id="f-quota" value="${esc(s.quotaPerUnit)}" placeholder="默认 500000"></div>
     <div class="field"><label>货币单位</label><select id="f-currency"><option value="" ${!s.currency ? "selected" : ""}>不换算</option><option value="USD" ${s.currency === "USD" ? "selected" : ""}>USD</option><option value="CNY" ${s.currency === "CNY" ? "selected" : ""}>CNY</option></select></div>
-    <div class="field"><label>人民币换算比例（1额度＝？人民币）</label><input id="f-ratio" value="${esc(s.modelRatio)}" placeholder="默认 1"><div class="hint">用于模型比价时的价格折算</div></div>
-
-    <div style="text-align:center; margin: 16px 0 10px;">
-      <a href="javascript:void(0)" id="btnTutorialFromForm" style="color:var(--accent); font-size:13px; text-decoration:none;">👉 不知道怎么填？点此查看换算教程</a>
-    </div>
+    <div class="field"><label>人民币换算比例（1额度＝？人民币）</label><input id="f-ratio" value="${esc(s.modelRatio)}" placeholder="默认 1"></div>
+    <div style="text-align:center; margin: 16px 0 10px;"><a href="javascript:void(0)" id="btnTutorialFromForm" style="color:var(--accent); font-size:13px; text-decoration:none;">👉 不知道怎么填？点此查看换算教程</a></div>
     <div class="btn-row"><button class="btn" id="btnCancel">取消</button><button class="btn primary" id="btnSave">保存</button></div>
   `);
   
   document.getElementById("btnTutorialFromForm").onclick = showTutorial;
-
   document.querySelectorAll("#tagPicker .chip").forEach(c => c.onclick = () => c.classList.toggle("active"));
   document.getElementById("btnCancel").onclick = closeModal;
   document.getElementById("btnSave").onclick = () => {
     const name = document.getElementById("f-name").value.trim();
     const invite = document.getElementById("f-invite").value.trim();
-    if (!name || !invite) { toast("站名和链接必填"); return; }
+    if (!name || !invite) { toast("站名和主链接必填"); return; }
     const tags = [...document.querySelectorAll("#tagPicker .chip.active")].map(c => c.dataset.tag);
     const obj = {
-      id: s.id || uid(), name, invite, group: document.getElementById("f-group").value.trim() || "其他", tags,
-      note: document.getElementById("f-note").value.trim(), hasCheckin: document.getElementById("f-hasCheckin").value === "1",
-      todayCheckedIn: s.todayCheckedIn || false, lastCheckinDate: s.lastCheckinDate || "",
-      balance: document.getElementById("f-balance").value.trim(), 
-      quotaPerUnit: parseFloat(document.getElementById("f-quota").value) || 500000, 
-      currency: document.getElementById("f-currency").value, 
-      apiEndpoint: document.getElementById("f-api").value.trim(),
-      modelRatio: parseFloat(document.getElementById("f-ratio").value) || 1, 
-      accessToken: document.getElementById("f-token").value.trim(),
-      siteType: document.getElementById("f-siteType").value,
-      userId: document.getElementById("f-uid").value.trim(), sourceId: s.sourceId || null, createdAt: s.createdAt || new Date().toISOString(), lastOpenedAt: s.lastOpenedAt || ""
+      id: s.id || uid(), name, invite, shareLink: document.getElementById("f-shareLink").value.trim(), 
+      group: document.getElementById("f-group").value.trim() || "其他", tags, note: document.getElementById("f-note").value.trim(), 
+      hasCheckin: document.getElementById("f-hasCheckin").value === "1", todayCheckedIn: s.todayCheckedIn || false, lastCheckinDate: s.lastCheckinDate || "",
+      balance: document.getElementById("f-balance").value.trim(), quotaPerUnit: parseFloat(document.getElementById("f-quota").value) || 500000, 
+      currency: document.getElementById("f-currency").value, apiEndpoint: document.getElementById("f-api").value.trim(), modelRatio: parseFloat(document.getElementById("f-ratio").value) || 1, 
+      accessToken: document.getElementById("f-token").value.trim(), siteType: document.getElementById("f-siteType").value, userId: document.getElementById("f-uid").value.trim(), 
+      sourceId: s.sourceId || null, createdAt: s.createdAt || new Date().toISOString(), lastOpenedAt: s.lastOpenedAt || ""
     };
     if (editing) state.sites = state.sites.map(x => x.id === obj.id ? obj : x); else state.sites.push(obj);
     store.saveSites(state.sites); closeModal(); renderList(); renderRegistry(); toast(editing ? "已保存" : "已添加");
   };
 }
 
-/* ====== 模型页与真实拉取逻辑 ====== */
+/* ====== 收录站点多选与拉取 ====== */
+function regCardHTML(s) { 
+  const added = state.sites.some(x => x.sourceId === s.id); 
+  const tags = (s.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join(""); 
+  const checked = state.selectedRegIds.has(s.id) ? "checked" : "";
+  return `<div class="reg-card" data-id="${esc(s.id)}" style="cursor:pointer">
+    <div class="reg-top">
+      <div class="reg-name">${(s.tags||[]).includes("常用") ? '<span style="color:var(--accent);margin-right:4px;font-size:15px">☆</span>' : ''}${esc(s.name)}</div>
+      <div class="card-actions">
+        <button class="mini-btn ${added ? "done" : ""}" data-add="${esc(s.id)}" ${added ? "disabled" : ""}>${added ? "已添加" : "添加"}</button>
+        <input type="checkbox" class="checkbox" data-regcheck="${esc(s.id)}" ${checked}>
+      </div>
+    </div>
+    <div class="card-tags">${tags}</div>
+    <div class="reg-note">${esc(s.group)}｜${linkify(s.note || "")}</div>
+  </div>`; 
+}
+
+function renderRegGroupFilter() { const wrap = document.getElementById("regGroupFilter"); if(!wrap) return; const chips = [`<span class="chip ${state.regFilterGroup === "all" ? "active" : ""}" data-group="all">全部</span>`]; (REGISTRY.presetGroups||[]).forEach(g => chips.push(`<span class="chip ${state.regFilterGroup === g ? "active" : ""}" data-group="${esc(g)}">${esc(g)}</span>`)); wrap.innerHTML = chips.join(""); wrap.querySelectorAll(".chip").forEach(c => { c.onclick = () => { state.regFilterGroup = c.dataset.group; renderRegGroupFilter(); renderRegistry(); }; }); }
+function renderRegTagFilter() { const wrap = document.getElementById("regTagFilter"); if(!wrap) return; wrap.innerHTML = (REGISTRY.presetTags||[]).map(t => `<span class="chip ${state.regFilterTags.includes(t) ? "active" : ""}" data-tag="${esc(t)}">${esc(t)}</span>`).join(""); wrap.querySelectorAll(".chip").forEach(c => { c.onclick = () => { const t = c.dataset.tag; const i = state.regFilterTags.indexOf(t); if (i >= 0) state.regFilterTags.splice(i, 1); else state.regFilterTags.push(t); renderRegTagFilter(); renderRegistry(); }; }); }
+
+function renderRegistry() {
+  if(!document.getElementById("regList")) return;
+  renderRegGroupFilter(); renderRegTagFilter();
+  let list = (REGISTRY.sites || []).slice();
+  if (state.search.trim()) { const q = state.search.trim().toLowerCase(); list = list.filter(s => (s.name||"").toLowerCase().includes(q) || (s.note||"").toLowerCase().includes(q) || (s.tags||[]).some(t => t.toLowerCase().includes(q))); }
+  if (state.regFilterGroup !== "all") list = list.filter(s => s.group === state.regFilterGroup);
+  if (state.regFilterTags.length) list = list.filter(s => state.regFilterTags.every(t => (s.tags || []).includes(t)));
+  
+  const entryBtn = document.getElementById("btnRegistry");
+  if (!document.getElementById("registryPanel").hidden) entryBtn.textContent = "收起收录站点";
+  else if (state.search.trim()) entryBtn.textContent = `收录站点（匹配 ${list.length} 个，点击展开）`;
+  else entryBtn.textContent = "收录站点（点击展开）";
+  
+  const wrap = document.getElementById("regList");
+  if (!list.length) { wrap.innerHTML = `<div class="empty">没有匹配的收录站点</div>`; return; }
+  
+  const groups = [...(REGISTRY.presetGroups||[])]; list.forEach(s => { if (s.group && !groups.includes(s.group)) groups.push(s.group); });
+  const html = []; groups.forEach(g => { const items = list.filter(s => s.group === g); if (!items.length) return; const collapsed = state.regCollapsed.includes(g); html.push(`<section class="group ${collapsed ? "collapsed" : ""}" data-group="${esc(g)}"><div class="group-head"><span class="arrow">▼</span><span class="gname">${esc(g)}</span><span class="gcount">${items.length}</span></div><div class="group-body">${items.map(regCardHTML).join("")}</div></section>`); });
+  wrap.innerHTML = html.join("");
+  
+  wrap.querySelectorAll(".group-head").forEach(h => { h.onclick = () => { const sec = h.parentElement; const g = sec.dataset.group; sec.classList.toggle("collapsed"); const set = new Set(state.regCollapsed); if (sec.classList.contains("collapsed")) set.add(g); else set.delete(g); state.regCollapsed = [...set]; }; });
+  
+  wrap.querySelectorAll(".reg-card").forEach(card => {
+    card.onclick = (e) => {
+      if (e.target.closest("button") || e.target.closest(".checkbox")) return;
+      const id = card.dataset.id; const r = REGISTRY.sites.find(s => s.id === id);
+      if (r && r.invite) window.open(r.invite, "_blank");
+    };
+  });
+  
+  wrap.querySelectorAll("[data-add]").forEach(btn => { btn.onclick = () => addFromRegistry(btn.dataset.add); });
+  wrap.querySelectorAll(".checkbox[data-regcheck]").forEach(cb => {
+    cb.onchange = (e) => {
+      const id = cb.dataset.regcheck;
+      if(e.target.checked) state.selectedRegIds.add(id); else state.selectedRegIds.delete(id);
+    };
+  });
+}
+
+document.getElementById("btnSelectAllReg").onclick = () => {
+  let list = (REGISTRY.sites || []).slice();
+  if (state.search.trim()) { const q = state.search.trim().toLowerCase(); list = list.filter(s => (s.name||"").toLowerCase().includes(q) || (s.note||"").toLowerCase().includes(q) || (s.tags||[]).some(t => t.toLowerCase().includes(q))); }
+  if (state.regFilterGroup !== "all") list = list.filter(s => s.group === state.regFilterGroup);
+  if (state.regFilterTags.length) list = list.filter(s => state.regFilterTags.every(t => (s.tags || []).includes(t)));
+  
+  if(list.length === 0) return;
+  const allSelected = list.every(s => state.selectedRegIds.has(s.id));
+  list.forEach(s => { if(allSelected) state.selectedRegIds.delete(s.id); else state.selectedRegIds.add(s.id); });
+  renderRegistry();
+};
+
+document.getElementById("btnBatchAddReg").onclick = () => {
+  if(state.selectedRegIds.size === 0) return toast("请先勾选要添加的站点");
+  let count = 0;
+  state.selectedRegIds.forEach(id => {
+    const r = REGISTRY.sites.find(s => s.id === id);
+    if(r && !state.sites.some(x => x.sourceId === r.id)) { addFromRegistry(id); count++; }
+  });
+  state.selectedRegIds.clear();
+  renderRegistry();
+  toast(`成功添加 ${count} 个站点到我的站点`);
+};
+
+function addFromRegistry(rid) {
+  const r = REGISTRY.sites.find(s => s.id === rid); if (!r) return;
+  if (state.sites.some(x => x.sourceId === r.id)) { toast("已经添加过了"); return; }
+  let host = ""; try { host = new URL(r.invite).origin; } catch {}
+  const obj = { id: uid(), name: r.name, invite: r.invite, shareLink: "", group: r.group, tags: [...(r.tags || [])], note: r.note || "", hasCheckin: ["有签到", "限制签到"].includes(r.group), todayCheckedIn: false, lastCheckinDate: "", balance: "", quotaPerUnit: "500000", currency: "CNY", apiEndpoint: host ? host : "", siteType: "newapi", modelRatio: "1", accessToken: "", userId: "", sourceId: r.id, createdAt: new Date().toISOString(), lastOpenedAt: "" };
+  state.sites.push(obj); store.saveSites(state.sites); renderList(); renderRegistry();
+}
+
+/* ====== 模型页与拉取逻辑 ====== */
 function getProvider(modelName) {
   const n = (modelName || "").toLowerCase();
   if (n.includes("gpt") || n.includes("dall-e") || n.includes("whisper")) return "OpenAI";
@@ -427,101 +477,39 @@ function getProvider(modelName) {
 }
 
 function renderProviderFilter() {
-  const wrap = document.getElementById("providerFilter");
-  if(!wrap) return;
+  const wrap = document.getElementById("providerFilter"); if(!wrap) return;
   const providers = ["全部", "OpenAI", "Anthropic", "Google", "Meta", "通义千问", "智谱", "DeepSeek", "其他"];
   wrap.innerHTML = providers.map(p => `<span class="chip ${state.providerFilter.includes(p) || (p==="全部" && state.providerFilter.length===0) ? "active" : ""}" data-p="${p}">${p}</span>`).join("");
-  wrap.querySelectorAll(".chip").forEach(c => {
-    c.onclick = () => {
-      const p = c.dataset.p;
-      if (p === "全部") state.providerFilter = [];
-      else {
-        const idx = state.providerFilter.indexOf(p);
-        if (idx >= 0) state.providerFilter.splice(idx, 1); else state.providerFilter.push(p);
-      }
-      renderProviderFilter(); renderModelList();
-    };
-  });
+  wrap.querySelectorAll(".chip").forEach(c => { c.onclick = () => { const p = c.dataset.p; if (p === "全部") state.providerFilter = []; else { const idx = state.providerFilter.indexOf(p); if (idx >= 0) state.providerFilter.splice(idx, 1); else state.providerFilter.push(p); } renderProviderFilter(); renderModelList(); }; });
 }
 
 function renderPriceTypeFilter() {
-  const wrap = document.getElementById("priceTypeFilter");
-  if(!wrap) return;
+  const wrap = document.getElementById("priceTypeFilter"); if(!wrap) return;
   const types = ["全部", "按次", "按量"];
   wrap.innerHTML = types.map(t => `<span class="chip ${state.priceTypeFilter.includes(t) || (t==="全部" && state.priceTypeFilter.length===0) ? "active" : ""}" data-t="${t}">${t}</span>`).join("");
-  wrap.querySelectorAll(".chip").forEach(c => {
-    c.onclick = () => {
-      const t = c.dataset.t;
-      if (t === "全部") state.priceTypeFilter = [];
-      else {
-        const idx = state.priceTypeFilter.indexOf(t);
-        if (idx >= 0) state.priceTypeFilter.splice(idx, 1); else state.priceTypeFilter.push(t);
-      }
-      renderPriceTypeFilter(); renderModelList();
-    };
-  });
+  wrap.querySelectorAll(".chip").forEach(c => { c.onclick = () => { const t = c.dataset.t; if (t === "全部") state.priceTypeFilter = []; else { const idx = state.priceTypeFilter.indexOf(t); if (idx >= 0) state.priceTypeFilter.splice(idx, 1); else state.priceTypeFilter.push(t); } renderPriceTypeFilter(); renderModelList(); }; });
 }
 
 function renderSiteFilter() {
-  const wrap = document.getElementById("siteFilter");
-  if(!wrap) return;
+  const wrap = document.getElementById("siteFilter"); if(!wrap) return;
   const siteNames = [...new Set(state.modelPrices.map(m => m.siteName))];
-  if (siteNames.length === 0) {
-    wrap.innerHTML = `<div style="font-size:12px;color:#999;">暂无站点数据</div>`;
-    return;
-  }
-
+  if (siteNames.length === 0) { wrap.innerHTML = `<div style="font-size:12px;color:#999;">暂无站点数据</div>`; return; }
   const chips = [`<span class="chip ${state.siteFilter.length === 0 ? "active" : ""}" data-s="all">全选</span>`];
-  siteNames.forEach(s => {
-    chips.push(`<span class="chip ${state.siteFilter.includes(s) ? "active" : ""}" data-s="${esc(s)}">${esc(s)}</span>`);
-  });
-  
+  siteNames.forEach(s => chips.push(`<span class="chip ${state.siteFilter.includes(s) ? "active" : ""}" data-s="${esc(s)}">${esc(s)}</span>`));
   wrap.innerHTML = chips.join("");
-  wrap.querySelectorAll(".chip").forEach(c => {
-    c.onclick = () => {
-      const s = c.dataset.s;
-      if (s === "all") state.siteFilter = [];
-      else {
-        const idx = state.siteFilter.indexOf(s);
-        if (idx >= 0) state.siteFilter.splice(idx, 1); else state.siteFilter.push(s);
-      }
-      renderSiteFilter(); renderModelList();
-    };
-  });
+  wrap.querySelectorAll(".chip").forEach(c => { c.onclick = () => { const s = c.dataset.s; if (s === "all") state.siteFilter = []; else { const idx = state.siteFilter.indexOf(s); if (idx >= 0) state.siteFilter.splice(idx, 1); else state.siteFilter.push(s); } renderSiteFilter(); renderModelList(); }; });
 }
 
 function renderModelList() {
-  const wrap = document.getElementById("modelList");
-  if (!wrap) return;
-  renderProviderFilter();
-  renderPriceTypeFilter();
-  renderSiteFilter();
-
+  const wrap = document.getElementById("modelList"); if (!wrap) return;
+  renderProviderFilter(); renderPriceTypeFilter(); renderSiteFilter();
   let list = state.modelPrices.slice();
-  
-  if (state.modelSearch.trim()) {
-    const q = state.modelSearch.trim().toLowerCase();
-    list = list.filter(m => (m.modelName||"").toLowerCase().includes(q) || (m.siteName||"").toLowerCase().includes(q));
-  }
-  
-  if (state.providerFilter.length) {
-    list = list.filter(m => state.providerFilter.includes(getProvider(m.modelName)));
-  }
-  
-  if (state.siteFilter.length) {
-    list = list.filter(m => state.siteFilter.includes(m.siteName));
-  }
-
-  if (state.priceTypeFilter.length) {
-    list = list.filter(m => state.priceTypeFilter.includes(m.priceType));
-  }
-
+  if (state.modelSearch.trim()) { const q = state.modelSearch.trim().toLowerCase(); list = list.filter(m => (m.modelName||"").toLowerCase().includes(q) || (m.siteName||"").toLowerCase().includes(q)); }
+  if (state.providerFilter.length) list = list.filter(m => state.providerFilter.includes(getProvider(m.modelName)));
+  if (state.siteFilter.length) list = list.filter(m => state.siteFilter.includes(m.siteName));
+  if (state.priceTypeFilter.length) list = list.filter(m => state.priceTypeFilter.includes(m.priceType));
   list.sort((a, b) => (a.cnyPrice || 0) - (b.cnyPrice || 0));
-
-  if (!list.length) {
-    wrap.innerHTML = `<div class="empty">暂无数据<br>点击右上角「更新价格」拉取，或更改筛选条件。</div>`;
-    return;
-  }
+  if (!list.length) { wrap.innerHTML = `<div class="empty">暂无数据<br>点击右上角「更新价格」拉取，或更改筛选条件。</div>`; return; }
   
   wrap.innerHTML = list.map(m => {
     let html = `<div class="model-card" onclick="openModelDrawer('${m.siteId}')">
@@ -530,26 +518,20 @@ function renderModelList() {
         <div class="model-meta">${esc(m.siteName)} | ${m.priceType}</div>
       </div>
       <div class="model-price" style="text-align:right;">`;
-      
     if (m.priceType === "按量") {
-      html += `输入: ￥${(m.cnyInput || 0).toFixed(4)} / 1M<br>
-              输出: ￥${(m.cnyOutput || 0).toFixed(4)} / 1M<br>
-              <span style="font-size:11px;color:#999;font-weight:normal;">(额度: ${m.rawInput.toFixed(2)} / ${m.rawOutput.toFixed(2)})</span>`;
+      html += `输入: ￥${(m.cnyInput || 0).toFixed(4)} / 1M<br>输出: ￥${(m.cnyOutput || 0).toFixed(4)} / 1M<br><span style="font-size:11px;color:#999;font-weight:normal;">(额度: ${m.rawInput.toFixed(2)} / ${m.rawOutput.toFixed(2)})</span>`;
     } else {
-      html += `￥${(m.cnyInput || 0).toFixed(4)} / 次<br>
-              <span style="font-size:11px;color:#999;font-weight:normal;">(额度: ${m.rawInput})</span>`;
+      html += `￥${(m.cnyInput || 0).toFixed(4)} / 次<br><span style="font-size:11px;color:#999;font-weight:normal;">(额度: ${m.rawInput})</span>`;
     }
-    
     html += `</div></div>`;
     return html;
   }).join("");
 }
 
 window.openModelDrawer = (siteId) => {
-  const s = state.sites.find(x => x.id === siteId);
-  if (!s) return;
+  const s = state.sites.find(x => x.id === siteId); if (!s) return;
   const tags = (s.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join("");
-  document.getElementById("modalBox").innerHTML = `
+  showModal(`
     <h3>来源站点</h3>
     <div class="card" style="margin-bottom:16px;">
       <div class="card-top"><div class="card-name">${esc(s.name)}</div></div>
@@ -561,66 +543,33 @@ window.openModelDrawer = (siteId) => {
       </div>
     </div>
     <div class="btn-row"><button class="btn" onclick="closeModal()">关闭</button></div>
-  `;
-  document.getElementById("modalMask").classList.add("show");
+  `);
 };
 
 document.getElementById("btnFetchPrices").onclick = async () => {
   const sites = state.sites.filter(s => s.apiEndpoint && s.siteType !== "manual" && s.siteType !== "deepseek" && s.siteType !== "siliconflow");
   if (!sites.length) return toast("没有支持拉取价格的中转站");
-  const btn = document.getElementById("btnFetchPrices");
-  btn.textContent = "拉取中…"; btn.disabled = true;
+  const btn = document.getElementById("btnFetchPrices"); btn.textContent = "拉取中…"; btn.disabled = true;
   let newPrices = []; let successCount = 0;
-
   for (const s of sites) {
     try {
       const url = s.apiEndpoint.replace(/\/+$/, "") + "/api/pricing";
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 8000);
-      const res = await fetchWithProxy(url, { signal: controller.signal });
-      clearTimeout(timeoutId);
-      
+      const controller = new AbortController(); const timeoutId = setTimeout(() => controller.abort(), 8000);
+      const res = await fetchWithProxy(url, { signal: controller.signal }); clearTimeout(timeoutId);
       if (res.ok) {
-        const data = await res.json();
-        const items = data.data || data.models || data;
+        const data = await res.json(); const items = data.data || data.models || data;
         if (Array.isArray(items)) {
           items.forEach(item => {
-            const modelName = item.model_name || item.model || item.id;
-            if(!modelName) return;
-
+            const modelName = item.model_name || item.model || item.id; if(!modelName) return;
             const mRatio = parseFloat(item.model_ratio || item.ratio) || 0;
             const cRatio = parseFloat(item.completion_ratio) || mRatio;
             const mPrice = parseFloat(item.model_price || item.price);
-            
             const rate = s.modelRatio || 1;
-
             if (mRatio > 0) {
-              // 按量计算
-              const rawIn = mRatio * 2; 
-              const rawOut = rawIn * cRatio; 
-              const cnyInput = rawIn * rate;
-              const cnyOutput = rawOut * rate; 
-              newPrices.push({
-                siteId: s.id, siteName: s.name, modelName: modelName,
-                priceType: "按量",
-                rawInput: rawIn,
-                rawOutput: rawOut,
-                cnyInput: cnyInput,
-                cnyOutput: cnyOutput,
-                cnyPrice: cnyInput 
-              });
+              const rawIn = mRatio * 2; const rawOut = rawIn * cRatio; 
+              newPrices.push({ siteId: s.id, siteName: s.name, modelName: modelName, priceType: "按量", rawInput: rawIn, rawOutput: rawOut, cnyInput: rawIn * rate, cnyOutput: rawOut * rate, cnyPrice: rawIn * rate });
             } else if (!isNaN(mPrice)) {
-              // 按次计算
-              const cnyPrice = mPrice * rate;
-              newPrices.push({
-                siteId: s.id, siteName: s.name, modelName: modelName,
-                priceType: "按次",
-                rawInput: mPrice,
-                rawOutput: 0,
-                cnyInput: cnyPrice,
-                cnyOutput: 0,
-                cnyPrice: cnyPrice
-              });
+              newPrices.push({ siteId: s.id, siteName: s.name, modelName: modelName, priceType: "按次", rawInput: mPrice, rawOutput: 0, cnyInput: mPrice * rate, cnyOutput: 0, cnyPrice: mPrice * rate });
             }
           });
           successCount++;
@@ -628,64 +577,20 @@ document.getElementById("btnFetchPrices").onclick = async () => {
       }
     } catch (e) { console.warn(`拉取 ${s.name} 失败:`, e); }
   }
-
-  state.modelPrices = newPrices;
-  store.savePrices(state.modelPrices);
-  renderModelList();
-  btn.textContent = "↻ 更新价格"; btn.disabled = false;
-  toast(`成功拉取 ${successCount}/${sites.length} 个站点`);
+  state.modelPrices = newPrices; store.savePrices(state.modelPrices); renderModelList();
+  btn.textContent = "↻ 更新价格"; btn.disabled = false; toast(`成功拉取 ${successCount}/${sites.length} 个站点`);
 };
 
 document.getElementById("modelSearchInput").oninput = e => { state.modelSearch = e.target.value; renderModelList(); };
 
-/* ====== 收录与设置弹窗 ====== */
-function renderRegGroupFilter() { const wrap = document.getElementById("regGroupFilter"); if(!wrap) return; const chips = [`<span class="chip ${state.regFilterGroup === "all" ? "active" : ""}" data-group="all">全部</span>`]; (REGISTRY.presetGroups||[]).forEach(g => chips.push(`<span class="chip ${state.regFilterGroup === g ? "active" : ""}" data-group="${esc(g)}">${esc(g)}</span>`)); wrap.innerHTML = chips.join(""); wrap.querySelectorAll(".chip").forEach(c => { c.onclick = () => { state.regFilterGroup = c.dataset.group; renderRegGroupFilter(); renderRegistry(); }; }); }
-function renderRegTagFilter() { const wrap = document.getElementById("regTagFilter"); if(!wrap) return; wrap.innerHTML = (REGISTRY.presetTags||[]).map(t => `<span class="chip ${state.regFilterTags.includes(t) ? "active" : ""}" data-tag="${esc(t)}">${esc(t)}</span>`).join(""); wrap.querySelectorAll(".chip").forEach(c => { c.onclick = () => { const t = c.dataset.tag; const i = state.regFilterTags.indexOf(t); if (i >= 0) state.regFilterTags.splice(i, 1); else state.regFilterTags.push(t); renderRegTagFilter(); renderRegistry(); }; }); }
-function renderRegistry() {
-  if(!document.getElementById("regList")) return;
-  renderRegGroupFilter(); renderRegTagFilter();
-  let list = (REGISTRY.sites || []).slice();
-  if (state.search.trim()) { const q = state.search.trim().toLowerCase(); list = list.filter(s => (s.name||"").toLowerCase().includes(q) || (s.note||"").toLowerCase().includes(q) || (s.tags||[]).some(t => t.toLowerCase().includes(q))); }
-  if (state.regFilterGroup !== "all") list = list.filter(s => s.group === state.regFilterGroup);
-  if (state.regFilterTags.length) list = list.filter(s => state.regFilterTags.every(t => (s.tags || []).includes(t)));
-  const entryBtn = document.getElementById("btnRegistry");
-  if (!document.getElementById("registryPanel").hidden) entryBtn.textContent = "收起收录站点";
-  else if (state.search.trim()) entryBtn.textContent = `收录站点（匹配 ${list.length} 个，点击展开）`;
-  else entryBtn.textContent = "收录站点（点击展开）";
-  const wrap = document.getElementById("regList");
-  if (!REGISTRY.sites || REGISTRY.sites.length === 0) { wrap.innerHTML = `<div class="empty">数据为空，请确认 registry.json 已上传。</div>`; return; }
-  if (!list.length) { wrap.innerHTML = `<div class="empty">没有匹配的收录站点</div>`; return; }
-  const groups = [...(REGISTRY.presetGroups||[])]; list.forEach(s => { if (s.group && !groups.includes(s.group)) groups.push(s.group); });
-  const html = []; groups.forEach(g => { const items = list.filter(s => s.group === g); if (!items.length) return; const collapsed = state.regCollapsed.includes(g); html.push(`<section class="group ${collapsed ? "collapsed" : ""}" data-group="${esc(g)}"><div class="group-head"><span class="arrow">▼</span><span class="gname">${esc(g)}</span><span class="gcount">${items.length}</span></div><div class="group-body">${items.map(regCardHTML).join("")}</div></section>`); });
-  wrap.innerHTML = html.join("");
-  wrap.querySelectorAll(".group-head").forEach(h => { h.onclick = () => { const sec = h.parentElement; const g = sec.dataset.group; sec.classList.toggle("collapsed"); const set = new Set(state.regCollapsed); if (sec.classList.contains("collapsed")) set.add(g); else set.delete(g); state.regCollapsed = [...set]; }; });
-  
-  wrap.querySelectorAll(".reg-card").forEach(card => {
-    card.onclick = (e) => {
-      if (e.target.closest("button")) return;
-      const id = card.dataset.id;
-      const r = REGISTRY.sites.find(s => s.id === id);
-      if (r && r.invite) window.open(r.invite, "_blank");
-    };
-  });
-  
-  wrap.querySelectorAll("[data-add]").forEach(btn => { btn.onclick = () => addFromRegistry(btn.dataset.add); });
-}
-function regCardHTML(s) { const added = state.sites.some(x => x.sourceId === s.id); const tags = (s.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join(""); return `<div class="reg-card" data-id="${esc(s.id)}" style="cursor:pointer"><div class="reg-top"><div class="reg-name">${(s.tags||[]).includes("常用") ? '<span style="color:var(--accent);margin-right:4px;font-size:15px">☆</span>' : ''}${esc(s.name)}</div><button class="mini-btn ${added ? "done" : ""}" data-add="${esc(s.id)}" ${added ? "disabled" : ""}>${added ? "已添加" : "添加"}</button></div><div class="card-tags">${tags}</div><div class="reg-note">${esc(s.group)}｜${linkify(s.note || "")}</div></div>`; }
-function addFromRegistry(rid) { const r = REGISTRY.sites.find(s => s.id === rid); if (!r) return; if (state.sites.some(x => x.sourceId === r.id)) { toast("已经添加过了"); return; } let host = ""; try { host = new URL(r.invite).origin; } catch {} const obj = { id: uid(), name: r.name, invite: r.invite, group: r.group, tags: [...(r.tags || [])], note: r.note || "", hasCheckin: ["有签到", "限制签到"].includes(r.group), todayCheckedIn: false, lastCheckinDate: "", balance: "", quotaPerUnit: "500000", currency: "CNY", apiEndpoint: host ? host : "", siteType: "newapi", modelRatio: "1", accessToken: "", userId: "", sourceId: r.id, createdAt: new Date().toISOString(), lastOpenedAt: "" }; state.sites.push(obj); store.saveSites(state.sites); renderList(); renderRegistry(); toast(`已添加「${r.name}」`); }
-
+/* ====== 设置与弹窗 ====== */
 function openSettings() {
   const s = state.settings; const w = s.wallpaper || { type: "none", value: "", opacity: 0.82 }; const presetColors = ["#e8e4dd","#d4d9d6","#cfd6dc","#e3d8d2","#dcd8d0","#d9d5d0"];
   showModal(`
     <h3>设置</h3>
     <div class="settings-section"><h4>主题</h4><div class="theme-row"><button class="theme-btn ${s.theme !== "mono" ? "active" : ""}" data-theme-btn="morandi">莫兰迪</button><button class="theme-btn ${s.theme === "mono" ? "active" : ""}" data-theme-btn="mono">极简黑白</button></div></div>
     <div class="settings-section"><h4>应用名称</h4><input id="s-appName" value="${esc(s.appName)}" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--radius);background:#ffffff !important;color:#2d2b28 !important;-webkit-appearance:none;"></div>
-    
-    <div class="settings-section">
-      <h4>网络代理（解决跨域拉取余额）</h4>
-      <div class="field"><input id="s-proxyUrl" value="${esc(s.proxyUrl || '')}" placeholder="填入你的 Cloudflare Worker 地址"><div class="hint">不填将无法自动拉取。<a href="javascript:void(0)" id="btnShowTutorial" style="color:var(--accent)">点此查看免费配置教程</a></div></div>
-    </div>
-
+    <div class="settings-section"><h4>网络代理（解决跨域拉取余额）</h4><div class="field"><input id="s-proxyUrl" value="${esc(s.proxyUrl || '')}" placeholder="填入你的 Cloudflare Worker 地址"><div class="hint">不填将无法自动拉取。<a href="javascript:void(0)" id="btnShowTutorial" style="color:var(--accent)">点此查看免费配置教程</a></div></div></div>
     <div class="settings-section">
       <h4>壁纸</h4>
       <div class="field"><label>类型</label><select id="s-wallType"><option value="none" ${w.type === "none" ? "selected" : ""}>无</option><option value="color" ${w.type === "color" ? "selected" : ""}>纯色</option><option value="image" ${w.type === "image" ? "selected" : ""}>图片 URL / 本地上传</option></select></div>
@@ -704,11 +609,9 @@ function openSettings() {
   `);
   
   document.getElementById("btnShowTutorial").onclick = showTutorial;
-
   document.querySelectorAll("[data-theme-btn]").forEach(b => { b.onclick = () => { s.theme = b.dataset.themeBtn; store.saveSettings(s); applyTheme(); openSettings(); }; });
   document.getElementById("s-appName").oninput = e => { s.appName = e.target.value || "API小仓库"; store.saveSettings(s); applyWallpaper(); };
   document.getElementById("s-proxyUrl").oninput = e => { s.proxyUrl = e.target.value.trim(); store.saveSettings(s); };
-  
   const preview = () => { const type = document.getElementById("s-wallType").value; const opacity = parseInt(document.getElementById("s-opacity").value, 10) / 100; let value = ""; if (type === "color") { value = document.getElementById("s-wallColor").value; } else if (type === "image") { value = document.getElementById("s-wallValue").value.trim(); if (!value && s.wallpaper.type === "image" && s.wallpaper.value.startsWith('data:')) value = s.wallpaper.value; } s.wallpaper = { type, value, opacity }; store.saveSettings(s); applyWallpaper(); const pv = document.getElementById("wallPreview"); let css = "transparent"; if (type === "color") css = value || "transparent"; else if (type === "image") css = value ? `url("${value}") center/cover no-repeat` : "transparent"; pv.style.background = css; };
   const typeSel = document.getElementById("s-wallType"); typeSel.onchange = () => { const t = typeSel.value; document.getElementById("colorField").style.display = t === "color" ? "block" : "none"; document.getElementById("valueField").style.display = t === "image" ? "block" : "none"; preview(); };
   const colorInput = document.getElementById("s-wallColor"); colorInput.oninput = preview; colorInput.onchange = preview; document.querySelectorAll("#presetColors .preset-color").forEach(el => { el.onclick = () => { colorInput.value = el.dataset.color; preview(); }; });
@@ -728,50 +631,16 @@ function showTutorial() {
       <button class="btn primary" style="flex:1; font-size:13px;" onclick="document.getElementById('tut1').style.display='block';document.getElementById('tut2').style.display='none';">余额与比例</button>
       <button class="btn" style="flex:1; font-size:13px;" onclick="document.getElementById('tut1').style.display='none';document.getElementById('tut2').style.display='block';">配置免费代理</button>
     </div>
-    
     <div id="tut1" style="font-size:13px; line-height:1.6; color:var(--text-2);">
-      <div style="color:#b57b7b; background:#fdf5f5; padding:8px; border-radius:6px; margin-bottom:12px; font-size:12px;">
-        ⚠️ 注意：本工具的自动拉取余额和拉取模型功能依赖 Cloudflare 代理。由于网络环境限制，点击刷新拉取时，请务必确保开启了网络代理。如果未开启导致拉取失败，请直接在上方编辑框中手动填写余额。
-      </div>
-      
-      <b>一、余额换算：用于首页显示真实余额</b><br>
-      中转站接口返回的余额数据通常是底层的“Quota（配额）”，数值极大。需要通过除法将其转换为真实的金额。<br>
-      1. <b>默认情况</b>：大多数标准站点的换算比例默认为 500000（即 1 额度 = 500000 quota）。<br>
-      2. <b>自定义计算</b>：如果拉取的金额与实际不符，请使用以下公式自行计算：<br>
-      <code>接口拉取的原始 Quota ÷ 网页显示的真实金额 = 换算比例</code><br>
-      *(例如：接口拉回 74737，网页实际余额为 1976.43 元，则 74737 ÷ 1976.43 ＝ 37.814。此时在“换算比例”填入 37.814 即可。此比例仅用于让首页卡片显示正确的余额金额。)*<br><br>
-      
-      <b>二、模型单价换算：用于模型比价</b><br>
-      在“模型”页面中，接口拉取到的模型价格通常是“站点自定义额度”（如：12额度/次）或“倍率”（如：倍率 600）。需要通过乘法将其折算为人民币。<br>
-      1. <b>自定义额度计算</b>：参考站点的充值比例。如果充值 0.5 元可获得 100 额度，说明 1 额度 = 0.005 元。在“人民币换算比例”中填入 0.005，系统会将 12额度/次 自动计算为 0.06 元。<br>
-      2. <b>倍率计算</b>：大部分站点的标准倍率换算为 1 倍率 = 0.002 元。填入 0.002 即可。<br>
-      *(此比例仅用于模型比价页面的价格排序。)*
+      <div style="color:#b57b7b; background:#fdf5f5; padding:8px; border-radius:6px; margin-bottom:12px; font-size:12px;">⚠️ 注意：本工具的自动拉取余额和拉取模型功能依赖 Cloudflare 代理。由于网络环境限制，点击刷新拉取时，请务必确保开启了网络代理。如果未开启导致拉取失败，请直接在上方编辑框中手动填写余额。</div>
+      <b>一、余额换算：用于首页显示真实余额</b><br>中转站接口返回的余额数据通常是底层的“Quota（配额）”，数值极大。需要通过除法将其转换为真实的金额。<br>1. <b>默认情况</b>：大多数标准站点的换算比例默认为 500000（即 1 额度 = 500000 quota）。<br>2. <b>自定义计算</b>：如果拉取的金额与实际不符，请使用以下公式自行计算：<br><code>接口拉取的原始 Quota ÷ 网页显示的真实金额 = 换算比例</code><br>*(例如：接口拉回 74737，网页实际余额为 1976.43 元，则 74737 ÷ 1976.43 ＝ 37.814。此时在“换算比例”填入 37.814 即可。此比例仅用于让首页卡片显示正确的余额金额。)*<br><br>
+      <b>二、模型单价换算：用于模型比价</b><br>在“模型”页面中，接口拉取到的模型价格通常是“站点自定义额度”（如：12额度/次）或“倍率”（如：倍率 600）。需要通过乘法将其折算为人民币。<br>1. <b>自定义额度计算</b>：参考站点的充值比例。如果充值 0.5 元可获得 100 额度，说明 1 额度 = 0.005 元。在“人民币换算比例”中填入 0.005，系统会将 12额度/次 自动计算为 0.06 元。<br>2. <b>倍率计算</b>：大部分站点的标准倍率换算为 1 倍率 = 0.002 元。填入 0.002 即可。<br>*(此比例仅用于模型比价页面的价格排序。)*
     </div>
-
     <div id="tut2" style="display:none; font-size:13px; line-height:1.6; color:var(--text-2);">
-      <div style="color:#b57b7b; background:#fdf5f5; padding:8px; border-radius:6px; margin-bottom:12px; font-size:12px;">
-        ⚠️ 注意：注册和配置 Cloudflare Worker 的过程中，请确保你的网络代理处于开启状态，否则可能无法正常访问其控制台或无法部署成功。
-      </div>
-      
+      <div style="color:#b57b7b; background:#fdf5f5; padding:8px; border-radius:6px; margin-bottom:12px; font-size:12px;">⚠️ 注意：注册和配置 Cloudflare Worker 的过程中，请确保你的网络代理处于开启状态，否则可能无法正常访问其控制台或无法部署成功。</div>
       <p>由于浏览器的跨域安全限制，前端网页无法直接拉取其他站点的余额。你需要免费配置一个 Cloudflare Worker 作为中转代理。</p>
-      
-      <b>【第一步：注册并创建 Worker】</b><br>
-      1. 访问并登录 Cloudflare 官网 (dash.cloudflare.com)。<br>
-      2. 在左侧菜单栏找到并点击 “Workers & Pages”。<br>
-      <img src="https://1435398813yutang-blip.github.io/tuchuang/%E4%BB%A3%E7%90%861.jpg" style="max-width:100%; border-radius:6px; margin:8px 0; border:1px solid var(--border);"><br>
-      3. 点击 “Create application” 按钮，选择 “Create Worker”。<br>
-      <img src="https://1435398813yutang-blip.github.io/tuchuang/%E4%BB%A3%E7%90%862.jpg" style="max-width:100%; border-radius:6px; margin:8px 0; border:1px solid var(--border);"><br>
-      <img src="https://1435398813yutang-blip.github.io/tuchuang/%E4%BB%A3%E7%90%863.jpg" style="max-width:100%; border-radius:6px; margin:8px 0; border:1px solid var(--border);"><br>
-      4. 保持默认或随便起一个名字（例如 my-proxy），点击 “Deploy” 部署。<br>
-      <img src="https://1435398813yutang-blip.github.io/tuchuang/%E4%BB%A3%E7%90%864.jpg" style="max-width:100%; border-radius:6px; margin:8px 0; border:1px solid var(--border);"><br><br>
-
-      <b>【第二步：粘贴代理代码】</b><br>
-      1. 部署完成后，点击页面上的 “Edit code” 按钮进入代码编辑界面。<br>
-      <img src="https://1435398813yutang-blip.github.io/tuchuang/%E4%BB%A3%E7%90%865.jpg" style="max-width:100%; border-radius:6px; margin:8px 0; border:1px solid var(--border);"><br>
-      2. 将左侧代码框里默认的代码全部删除。<br>
-      3. 复制下方提供的代理代码，粘贴进去，然后点击右上角的 “Save and deploy” 部署。<br>
-      <img src="https://1435398813yutang-blip.github.io/tuchuang/%E4%BB%A3%E7%90%866.jpg" style="max-width:100%; border-radius:6px; margin:8px 0; border:1px solid var(--border);"><br>
-      
+      <b>【第一步：注册并创建 Worker】</b><br>1. 访问并登录 Cloudflare 官网 (dash.cloudflare.com)。<br>2. 在左侧菜单栏找到并点击 “Workers & Pages”。<br><img src="https://1435398813yutang-blip.github.io/tuchuang/%E4%BB%A3%E7%90%861.jpg" style="max-width:100%; border-radius:6px; margin:8px 0; border:1px solid var(--border);"><br>3. 点击 “Create application” 按钮，选择 “Create Worker”。<br><img src="https://1435398813yutang-blip.github.io/tuchuang/%E4%BB%A3%E7%90%862.jpg" style="max-width:100%; border-radius:6px; margin:8px 0; border:1px solid var(--border);"><br><img src="https://1435398813yutang-blip.github.io/tuchuang/%E4%BB%A3%E7%90%863.jpg" style="max-width:100%; border-radius:6px; margin:8px 0; border:1px solid var(--border);"><br>4. 保持默认或随便起一个名字（例如 my-proxy），点击 “Deploy” 部署。<br><img src="https://1435398813yutang-blip.github.io/tuchuang/%E4%BB%A3%E7%90%864.jpg" style="max-width:100%; border-radius:6px; margin:8px 0; border:1px solid var(--border);"><br><br>
+      <b>【第二步：粘贴代理代码】</b><br>1. 部署完成后，点击页面上的 “Edit code” 按钮进入代码编辑界面。<br><img src="https://1435398813yutang-blip.github.io/tuchuang/%E4%BB%A3%E7%90%865.jpg" style="max-width:100%; border-radius:6px; margin:8px 0; border:1px solid var(--border);"><br>2. 将左侧代码框里默认的代码全部删除。<br>3. 复制下方提供的代理代码，粘贴进去，然后点击右上角的 “Save and deploy” 部署。<br><img src="https://1435398813yutang-blip.github.io/tuchuang/%E4%BB%A3%E7%90%866.jpg" style="max-width:100%; border-radius:6px; margin:8px 0; border:1px solid var(--border);"><br>
       <div style="background:#2d2b28; color:#fff; padding:10px; border-radius:6px; font-family:monospace; font-size:11px; overflow-x:auto; white-space:pre; margin:8px 0;">export default {
   async fetch(request) {
     if (request.method === 'OPTIONS') return new Response(null, { headers: { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Allow-Headers': '*' } });
@@ -787,17 +656,9 @@ function showTutorial() {
       return newResponse;
     } catch (e) { return new Response(e.message, { status: 500, headers: { 'Access-Control-Allow-Origin': '*' } }); }
   }
-};</div>
-      <br>
-
-      <b>【第三步：填入代理地址】</b><br>
-      部署成功后，页面上方会显示一个类似 https://xxx.workers.dev 的网址。<br>
-      1. 复制这个网址。<br>
-      <img src="https://1435398813yutang-blip.github.io/tuchuang/%E4%BB%A3%E7%90%867.jpg" style="max-width:100%; border-radius:6px; margin:8px 0; border:1px solid var(--border);"><br>
-      2. 回到 API小仓库的 “设置” 页面。<br>
-      3. 将网址粘贴到 “网络代理” 输入框中，保存即可。
+};</div><br>
+      <b>【第三步：填入代理地址】</b><br>部署成功后，页面上方会显示一个类似 https://xxx.workers.dev 的网址。<br>1. 复制这个网址。<br><img src="https://1435398813yutang-blip.github.io/tuchuang/%E4%BB%A3%E7%90%867.jpg" style="max-width:100%; border-radius:6px; margin:8px 0; border:1px solid var(--border);"><br>2. 回到 API小仓库的 “设置” 页面。<br>3. 将网址粘贴到 “网络代理” 输入框中，保存即可。
     </div>
-
     <div class="btn-row"><button class="btn" onclick="closeModal()">关闭</button></div>
   `);
 }
@@ -810,9 +671,8 @@ function toast(msg) { const el = document.getElementById("toast"); el.textConten
 function bindEvents() {
   document.querySelectorAll(".nav-item").forEach(n => n.onclick = () => switchTab(n.dataset.tab));
   document.getElementById("btnNotice").onclick = () => {
-    const readList = store.getReadNotices(); // 获取打开前的已读列表
+    const readList = store.getReadNotices();
     let html = `<h3>公告</h3><div class="notice-contact"><b>联系作者</b><br>邮箱：${esc(REGISTRY.contact?.email || "")}<br>QQ：${esc(REGISTRY.contact?.qq || "")}</div>`;
-    
     let notices = (REGISTRY.notice || []).slice();
     notices.sort((a, b) => {
       const pinA = a.isPinned ? 1 : 0;
@@ -820,50 +680,21 @@ function bindEvents() {
       if (pinA !== pinB) return pinB - pinA;
       return (b.date || "").localeCompare(a.date || "");
     });
-
     const newReadList = [...readList];
-
     if (notices.length === 0) html += `<div class="empty" style="padding:20px;">暂无公告</div>`;
     else notices.forEach(n => { 
       const pinHtml = n.isPinned ? '<span style="background:var(--danger);color:#fff;font-size:10px;padding:2px 4px;border-radius:4px;">置顶</span>' : '';
       const noticeId = n.date + "_" + n.title;
       const isRead = readList.includes(noticeId);
-      
-      if (!isRead) newReadList.push(noticeId); // 如果未读，准备加入已读列表
-      
-      const expandedClass = isRead ? "" : "expanded"; // 未读默认展开
-      
-      html += `
-        <div class="notice-card ${expandedClass}" data-id="${esc(noticeId)}">
-          <div class="notice-header">
-            <div class="left-part">
-              ${pinHtml}
-              <span class="notice-title">${esc(n.title)}</span>
-            </div>
-            <div style="display:flex; align-items:center; gap:8px;">
-              <span class="notice-date">${esc(n.date)}</span>
-              <span class="notice-arrow">▼</span>
-            </div>
-          </div>
-          <div class="notice-content">${linkify(n.content)}</div>
-        </div>
-      `; 
+      if (!isRead) newReadList.push(noticeId);
+      const expandedClass = isRead ? "" : "expanded";
+      html += `<div class="notice-card ${expandedClass}" data-id="${esc(noticeId)}"><div class="notice-header"><div class="left-part">${pinHtml}<span class="notice-title">${esc(n.title)}</span></div><div style="display:flex; align-items:center; gap:8px;"><span class="notice-date">${esc(n.date)}</span><span class="notice-arrow">▼</span></div></div><div class="notice-content">${linkify(n.content)}</div></div>`; 
     });
-    
     html += `<div class="btn-row"><button class="btn" id="btnCloseNotice">关闭</button></div>`;
     showModal(html); 
-    
-    // 绑定折叠事件
-    document.querySelectorAll(".notice-header").forEach(header => {
-      header.onclick = () => {
-        header.parentElement.classList.toggle("expanded");
-      };
-    });
-
-    // 标记为已读，清除红点
+    document.querySelectorAll(".notice-header").forEach(header => { header.onclick = () => { header.parentElement.classList.toggle("expanded"); }; });
     store.saveReadNotices(newReadList);
     document.getElementById("noticeBadge").style.display = "none";
-
     document.getElementById("btnCloseNotice").onclick = closeModal;
   };
   document.getElementById("btnSearch").onclick = () => { const bar = document.getElementById("searchBar"); bar.classList.toggle("show"); if (bar.classList.contains("show")) document.getElementById("searchInput").focus(); };
