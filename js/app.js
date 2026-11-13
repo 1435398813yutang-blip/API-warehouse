@@ -3,7 +3,7 @@ const KEY_SITES = "axc_sites_v1";
 const KEY_SETTINGS = "axc_settings_v1";
 const KEY_PRICES = "axc_prices_v1";
 const KEY_READ_NOTICES = "axc_read_notices_v1";
-const KEY_CUSTOM_RATIOS = "axc_custom_ratios_v1"; // v1.2.0 新增：自定义分组倍率
+const KEY_CUSTOM_RATIOS = "axc_custom_ratios_v1"; 
 let REGISTRY = { notice: [], contact: [], presetGroups: [], presetTags: [], sites: [] };
 
 function defaultSettings() {
@@ -36,7 +36,7 @@ const state = {
   regFilterGroup: "all", regFilterTags: [], regCollapsed: [],
   selectedMyIds: new Set(), selectedRegIds: new Set(),
   fetchDrawerGroup: "all", fetchDrawerSelectedIds: new Set(),
-  customGroupRatios: {} // v1.2.0 内存中存储自定义倍率
+  customGroupRatios: {} 
 };
 
 function uid() { return "s_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
@@ -89,7 +89,7 @@ async function init() {
   state.settings = store.getSettings(); 
   state.sites = store.getSites(); 
   state.modelPrices = store.getPrices();
-  state.customGroupRatios = store.getCustomRatios(); // 加载自定义倍率
+  state.customGroupRatios = store.getCustomRatios(); 
 
   const today = todayStr(); let changed = false;
   state.sites.forEach(s => { if (s.todayCheckedIn && s.lastCheckinDate !== today) { s.todayCheckedIn = false; changed = true; } });
@@ -531,7 +531,6 @@ function renderSiteFilter() {
   wrap.querySelectorAll(".chip").forEach(c => { c.onclick = () => { const s = c.dataset.s; if (s === "all") state.siteFilter = []; else { const idx = state.siteFilter.indexOf(s); if (idx >= 0) state.siteFilter.splice(idx, 1); else state.siteFilter.push(s); } renderSiteFilter(); renderModelList(); }; });
 }
 
-// v1.2.0 获取应用于计算的倍率
 function getAppliedRatio(siteId, groupName, apiRatio) {
   const key = siteId + "_" + groupName;
   const custom = state.customGroupRatios[key];
@@ -540,7 +539,6 @@ function getAppliedRatio(siteId, groupName, apiRatio) {
 
   if (custom !== undefined) {
     finalRatio = parseFloat(custom);
-    // 如果接口有倍率且跟手填的不一样，触发警告
     if (apiRatio !== undefined && apiRatio !== null && parseFloat(apiRatio) !== finalRatio) {
       isWarning = true;
     }
@@ -597,18 +595,14 @@ function renderModelList() {
   
   let list = state.modelPrices.slice();
   
-  // v1.2.0：重新计算每个条目的真实价格
   list = list.map(m => {
     const site = state.sites.find(s => s.id === m.siteId) || { modelRatio: 1 };
     const siteRate = site.modelRatio || 1;
-    
-    // 获取最终倍率与警告状态
     const ratioInfo = getAppliedRatio(m.siteId, m.groupName, m.apiGroupRatio);
     
     let cnyInput = 0, cnyOutput = 0, cnyPrice = 0;
     
     if (m.priceType === "按量") {
-      // 按量 = (底层倍率 * 2) * 分组倍率 * 基础人民币比例
       const rawInWithGroup = m.rawInput * ratioInfo.ratio;
       const rawOutWithGroup = m.rawOutput * ratioInfo.ratio;
       cnyInput = rawInWithGroup * siteRate;
@@ -617,7 +611,6 @@ function renderModelList() {
       
       return { ...m, displayGroupRatio: ratioInfo.ratio, isWarning: ratioInfo.isWarning, cnyInput, cnyOutput, cnyPrice, displayRawInput: rawInWithGroup, displayRawOutput: rawOutWithGroup };
     } else {
-      // 按次 = 原始按次价格 * 分组倍率 * 基础人民币比例
       const rawPriceWithGroup = m.rawInput * ratioInfo.ratio;
       cnyInput = rawPriceWithGroup * siteRate;
       cnyPrice = cnyInput;
@@ -685,7 +678,6 @@ window.openModelDrawer = (siteId) => {
   `);
 };
 
-// ====== 更新价格抽屉 ======
 window.updateFetchDrawerUI = () => {
   const wrap = document.getElementById("fetchSiteList");
   const groupsWrap = document.getElementById("fetchGroupChips");
@@ -831,22 +823,21 @@ window.executeFetchPrices = async () => {
             const cRatio = parseFloat(item.completion_ratio) || mRatio;
             const mPrice = parseFloat(item.model_price || item.price);
             
-            // v1.2.0 分组解析逻辑
             let groups = ["默认"];
             if (item.enable_groups && Array.isArray(item.enable_groups) && item.enable_groups.length > 0) {
               groups = item.enable_groups;
             }
-            const groupRatios = item.group_ratio || {}; // 尝试读取倍率字典
+            const groupRatios = item.group_ratio || {}; 
 
             groups.forEach(gName => {
               const apiGroupRatio = groupRatios[gName] !== undefined ? parseFloat(groupRatios[gName]) : null;
-              const baseId = s.id + "_" + gName; // 用于唯一标识
+              const baseId = s.id + "_" + gName; 
 
               if (mRatio > 0) {
                 const rawIn = mRatio * 2; 
                 const rawOut = rawIn * cRatio; 
                 newPrices.push({ 
-                  id: baseId + "_" + modelName + "_vol", // 生成唯一ID防冲突
+                  id: baseId + "_" + modelName + "_vol", 
                   siteId: s.id, siteName: s.name, modelName, groupName: gName, apiGroupRatio: apiGroupRatio,
                   priceType: "按量", rawInput: rawIn, rawOutput: rawOut
                 });
@@ -897,8 +888,8 @@ document.getElementById("modelSearchInput").oninput = e => { state.modelSearch =
 /* ====== 设置与弹窗 ====== */
 function openSettings() {
   const s = state.settings; const w = s.wallpaper || { type: "none", value: "", opacity: 0.82 }; const presetColors = ["#e8e4dd","#d4d9d6","#cfd6dc","#e3d8d2","#dcd8d0","#d9d5d0"];
-  const appVersion = "v1.2.0"; // 版本更新
-  const cacheVersion = "v1.2.0"; // 版本更新
+  const appVersion = "v1.2.1"; 
+  const cacheVersion = "v1.2.1"; 
   
   showModal(`
     <h3>设置</h3>
@@ -925,6 +916,10 @@ function openSettings() {
       设计者：<span onclick="showContactModal()" style="color:var(--accent); cursor:pointer; text-decoration:underline;">漆岐</span>
     </div>
     
+    <div class="btn-row" style="margin-top: 10px; margin-bottom: 0;">
+      <button class="btn danger" id="s-clear-data" style="width:100%;">清空所有数据</button>
+    </div>
+
     <div class="btn-row"><button class="btn" id="s-close">关闭</button></div>
   `);
   
@@ -939,9 +934,63 @@ function openSettings() {
   document.getElementById("s-wallValue").oninput = preview;
   document.getElementById("s-wallFile").onchange = e => { const file = e.target.files[0]; if(!file) return; const reader = new FileReader(); reader.onload = (ev) => { const img = new Image(); img.onload = () => { const canvas = document.createElement("canvas"); const ctx = canvas.getContext("2d"); const MAX = 1280; let w = img.width, h = img.height; if (w > h) { if (w > MAX) { h *= MAX / w; w = MAX; } } else { if (h > MAX) { w *= MAX / h; h = MAX; } } canvas.width = w; canvas.height = h; ctx.drawImage(img, 0, 0, w, h); let q = 0.7; let d = canvas.toDataURL("image/jpeg", q); while (d.length > 400000 && q > 0.3) { q -= 0.1; d = canvas.toDataURL("image/jpeg", q); } document.getElementById("s-wallValue").value = d; preview(); }; img.src = ev.target.result; }; reader.readAsDataURL(file); };
   document.getElementById("s-opacity").oninput = e => { document.getElementById("opVal").textContent = e.target.value + "%"; preview(); }; preview();
+  
   document.getElementById("s-export").onclick = () => { const includeTokens = document.getElementById("s-exportTokens").checked; const sites = state.sites.map(x => { const copy = { ...x }; if (!includeTokens) { copy.accessToken = ""; copy.userId = ""; } return copy; }); const data = { app: "API小仓库", version: 1, exportedAt: new Date().toISOString(), includesTokens: includeTokens, settings: s, sites }; const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" }); const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = "api-xiaocangku-backup-" + todayStr() + ".json"; a.click(); URL.revokeObjectURL(a.href); toast(includeTokens ? "已导出（含令牌）" : "已导出（不含令牌）"); };
+  
   document.getElementById("s-import").onclick = () => document.getElementById("s-file").click();
-  document.getElementById("s-file").onchange = e => { const f = e.target.files[0]; if (!f) return; const reader = new FileReader(); reader.onload = () => { try { const data = JSON.parse(reader.result); if (!Array.isArray(data.sites)) throw new Error("格式不对"); if (!confirm(`导入 ${data.sites.length} 个站点，合并到现有列表？`)) return; data.sites.forEach(x => { if (!x.id) x.id = uid(); const idx = state.sites.findIndex(y => y.id === x.id); if (idx >= 0) state.sites[idx] = x; else state.sites.push(x); }); if (data.settings) { state.settings = Object.assign(state.settings, data.settings); store.saveSettings(state.settings); } store.saveSites(state.sites); closeModal(); applyTheme(); applyWallpaper(); renderGroupFilter(); renderTagFilter(); renderList(); renderRegistry(); toast("导入完成"); } catch (err) { toast("导入失败：" + err.message); } }; reader.readAsText(f); };
+  
+  document.getElementById("s-file").onchange = e => { 
+    const f = e.target.files[0]; if (!f) return; 
+    const reader = new FileReader(); 
+    reader.onload = () => { 
+      try { 
+        const data = JSON.parse(reader.result); 
+        if (!Array.isArray(data.sites)) throw new Error("格式不对"); 
+        if (!confirm(`导入 ${data.sites.length} 个站点，合并到现有列表？`)) return; 
+        
+        let preservedTokensCount = 0;
+
+        data.sites.forEach(x => { 
+          if (!x.id) x.id = uid(); 
+          const idx = state.sites.findIndex(y => y.id === x.id); 
+          if (idx >= 0) {
+            const oldSite = state.sites[idx];
+            // 防覆盖机制
+            if (!x.accessToken && oldSite.accessToken) { x.accessToken = oldSite.accessToken; preservedTokensCount++; }
+            if (!x.userId && oldSite.userId) { x.userId = oldSite.userId; }
+            state.sites[idx] = x; 
+          } else {
+            state.sites.push(x); 
+          }
+        }); 
+        
+        if (data.settings) { state.settings = Object.assign(state.settings, data.settings); store.saveSettings(state.settings); } 
+        store.saveSites(state.sites); 
+        closeModal(); 
+        applyTheme(); applyWallpaper(); renderGroupFilter(); renderTagFilter(); renderList(); renderRegistry(); 
+        
+        let msg = "导入完成";
+        if (preservedTokensCount > 0) msg += `（保留了 ${preservedTokensCount} 个原有令牌）`;
+        toast(msg); 
+      } catch (err) { 
+        toast("导入失败：" + err.message); 
+      } 
+    }; 
+    reader.readAsText(f); 
+  };
+
+  document.getElementById("s-clear-data").onclick = () => {
+    if (confirm("⚠️ 警告：这将永久删除你所有的站点、余额、设置和令牌！建议先导出备份。确定要清空吗？")) {
+      localStorage.clear();
+      if ('caches' in window) {
+        caches.keys().then(names => {
+          for (let name of names) caches.delete(name);
+        });
+      }
+      window.location.reload();
+    }
+  };
+
   document.getElementById("s-close").onclick = closeModal;
 }
 
