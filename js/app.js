@@ -568,39 +568,152 @@ window.openModelDrawer = (siteId) => {
   `);
 };
 
-document.getElementById("btnFetchPrices").onclick = async () => {
-  const sites = state.sites.filter(s => s.apiEndpoint && s.siteType !== "manual" && s.siteType !== "deepseek" && s.siteType !== "siliconflow");
-  if (!sites.length) return toast("没有支持拉取价格的中转站");
-  const btn = document.getElementById("btnFetchPrices"); btn.textContent = "拉取中…"; btn.disabled = true;
-  let newPrices = []; let successCount = 0;
-  for (const s of sites) {
+// ====== 选择拉取站点的抽屉 ======
+window.openFetchPricesDrawer = () => {
+  const groups = [...new Set(state.sites.map(s => s.group))].filter(Boolean);
+  const fetchSet = new Set(state.sites.map(s => s.id)); // 默认全选
+
+  const updateDrawerUI = () => {
+    const wrap = document.getElementById("fetchSiteList");
+    if(!wrap) return;
+    wrap.innerHTML = state.sites.map(s => `
+      <label style="display:flex; align-items:center; gap:8px; padding:8px 0; border-bottom:1px dashed #eee; cursor:pointer;">
+        <input type="checkbox" class="f-check" value="${s.id}" ${fetchSet.has(s.id) ? 'checked' : ''} style="width:16px; height:16px; accent-color:var(--accent);">
+        <span style="font-size:14px; flex:1;">${esc(s.name)} <span style="color:var(--text-2); font-size:12px;">(${esc(s.group||'未分组')})</span></span>
+      </label>
+    `).join("");
+
+    wrap.querySelectorAll(".f-check").forEach(cb => {
+      cb.onchange = (e) => {
+        if(e.target.checked) fetchSet.add(e.target.value);
+        else fetchSet.delete(e.target.value);
+      };
+    });
+  };
+
+  const groupChips = groups.map(g => `<span class="chip" onclick="
+    const s = state.sites.filter(x => x.group === '${esc(g)}');
+    s.forEach(x => document.querySelector('.f-check[value=\\'${esc(x.id)}\\']').checked = true);
+    s.forEach(x => fetchSet.add(x.id));
+  ">${esc(g)}</span>`).join("");
+
+  showModal(`
+    <h3>更新价格</h3>
+    <div style="margin-bottom:12px; display:flex; gap:8px;">
+      <button class="btn" style="flex:1; padding:6px; font-size:13px;" onclick="
+        document.querySelectorAll('.f-check').forEach(cb => { cb.checked = true; fetchSet.add(cb.value); });
+      ">全选</button>
+      <button class="btn" style="flex:1; padding:6px; font-size:13px;" onclick="
+        document.querySelectorAll('.f-check').forEach(cb => { cb.checked = false; fetchSet.clear(); });
+      ">取消</button>
+    </div>
+    <div style="margin-bottom:12px;">
+      <div style="font-size:12px; color:var(--text-2); margin-bottom:6px;">按分组快捷选择</div>
+      <div class="chip-row">${groupChips}</div>
+    </div>
+    
+    <div style="max-height:40vh; overflow-y:auto; margin-bottom:12px; background:#fff; border:1.5px solid var(--border); border-radius:var(--radius); padding:0 12px;" id="fetchSiteList">
+      <!-- 动态渲染站点列表 -->
+    </div>
+
+    <div style="font-size:12px; color:var(--b57b7b); background:#fdf5f5; padding:8px; border-radius:4px; margin-bottom:12px; line-height:1.5;">
+      💡 提示：部分站点可能因接口限制或网络问题导致拉取失败。更新失败将保留原有数据；更新成功但返回空列表，则会清空该站旧数据。
+    </div>
+
+    <div class="btn-row" style="margin-top:0;">
+      <button class="btn" onclick="closeModal()">取消</button>
+      <button class="btn primary" onclick="executeFetchPrices(fetchSet)">开始更新</button>
+    </div>
+  `);
+
+  updateDrawerUI();
+};
+
+window.executeFetchPrices = async (fetchSet) => {
+  const sitesToFetch = state.sites.filter(s => fetchSet.has(s.id));
+  if (!sitesToFetch.length) return toast("请至少选择一个站点");
+
+  closeModal();
+  const btn = document.getElementById("btnFetchPrices"); 
+  btn.textContent = "拉取中…"; btn.disabled = true;
+  
+  let newPrices = []; 
+  let successIds = []; // 记录成功更新（即使为空）的站点ID
+  let failCount = 0;
+
+  for (const s of sitesToFetch) {
+    // 如果没填端点，或属于不支持拉取的特定类型，直接算失败跳过
+    if (!s.apiEndpoint || ["manual", "deepseek", "siliconflow"].includes(s.siteType)) {
+      failCount++;
+      continue;
+    }
+    
     try {
       const url = s.apiEndpoint.replace(/\/+$/, "") + "/api/pricing";
-      const controller = new AbortController(); const timeoutId = setTimeout(() => controller.abort(), 8000);
-      const res = await fetchWithProxy(url, { signal: controller.signal }); clearTimeout(timeoutId);
+      const controller = new AbortController(); 
+      const timeoutId = setTimeout(() => controller.abort(), 8000);
+      const res = await fetchWithProxy(url, { signal: controller.signal }); 
+      clearTimeout(timeoutId);
+      
       if (res.ok) {
-        const data = await res.json(); const items = data.data || data.models || data;
+        const data = await res.json(); 
+        const items = data.data || data.models || data;
         if (Array.isArray(items)) {
+          let hasValidData = false;
           items.forEach(item => {
-            const modelName = item.model_name || item.model || item.id; if(!modelName) return;
+            const modelName = item.model_name || item.model || item.id; 
+            if(!modelName) return;
             const mRatio = parseFloat(item.model_ratio || item.ratio) || 0;
             const cRatio = parseFloat(item.completion_ratio) || mRatio;
             const mPrice = parseFloat(item.model_price || item.price);
             const rate = s.modelRatio || 1;
+            
             if (mRatio > 0) {
-              const rawIn = mRatio * 2; const rawOut = rawIn * cRatio; 
-              newPrices.push({ siteId: s.id, siteName: s.name, modelName: modelName, priceType: "按量", rawInput: rawIn, rawOutput: rawOut, cnyInput: rawIn * rate, cnyOutput: rawOut * rate, cnyPrice: rawIn * rate });
+              const rawIn = mRatio * 2; 
+              const rawOut = rawIn * cRatio; 
+              newPrices.push({ siteId: s.id, siteName: s.name, modelName, priceType: "按量", rawInput: rawIn, rawOutput: rawOut, cnyInput: rawIn * rate, cnyOutput: rawOut * rate, cnyPrice: rawIn * rate });
+              hasValidData = true;
             } else if (!isNaN(mPrice)) {
-              newPrices.push({ siteId: s.id, siteName: s.name, modelName: modelName, priceType: "按次", rawInput: mPrice, rawOutput: 0, cnyInput: mPrice * rate, cnyOutput: 0, cnyPrice: mPrice * rate });
+              newPrices.push({ siteId: s.id, siteName: s.name, modelName, priceType: "按次", rawInput: mPrice, rawOutput: 0, cnyInput: mPrice * rate, cnyOutput: 0, cnyPrice: mPrice * rate });
+              hasValidData = true;
             }
           });
-          successCount++;
+          // 只要有返回结果，就算成功（哪怕 items 是空数组），将其加入 successIds
+          successIds.push(s.id);
+        } else {
+          failCount++;
         }
+      } else {
+        failCount++;
       }
-    } catch (e) { console.warn(`拉取 ${s.name} 失败:`, e); }
+    } catch (e) { 
+      console.warn(`拉取 ${s.name} 失败:`, e); 
+      failCount++;
+    }
   }
-  state.modelPrices = newPrices; store.savePrices(state.modelPrices); renderModelList();
-  btn.textContent = "↻ 更新价格"; btn.disabled = false; toast(`成功拉取 ${successCount}/${sites.length} 个站点`);
+
+  // ==== 合并数据逻辑 ====
+  // 1. 移除旧数据中属于 successIds 的站点数据
+  const remainPrices = state.modelPrices.filter(p => !successIds.includes(p.siteId));
+  
+  // 2. 合并保留的数据和最新拉取的数据
+  state.modelPrices = [...remainPrices, ...newPrices];
+  
+  store.savePrices(state.modelPrices); 
+  renderModelList();
+  
+  btn.textContent = "↻ 更新价格"; btn.disabled = false;
+  
+  if (failCount > 0) {
+    toast(`更新完成！成功 ${successIds.length} 个，失败/跳过 ${failCount} 个`);
+  } else {
+    toast(`成功更新 ${successIds.length} 个站点价格`);
+  }
+};
+
+document.getElementById("btnFetchPrices").onclick = () => {
+  if (!state.sites.length) return toast("你还没有添加任何站点");
+  openFetchPricesDrawer();
 };
 
 document.getElementById("modelSearchInput").oninput = e => { state.modelSearch = e.target.value; renderModelList(); };
@@ -736,7 +849,6 @@ function bindEvents() {
     
     let html = `<h3>公告</h3>`;
     
-    // 联系方式折叠面板
     if (contactHtml) {
       html += `
         <div class="notice-contact" style="padding:0; overflow:hidden; margin-bottom:12px;">
