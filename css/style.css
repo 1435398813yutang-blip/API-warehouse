@@ -185,7 +185,6 @@ main{padding:4px 16px 20px;position:relative;z-index:10}
 .notice-content{font-size:13px;color:var(--text);line-height:1.6;white-space:pre-wrap;word-break:break-word;display:none;margin-top:8px;border-top:1px dashed #eee;padding-top:8px;}
 .notice-card.expanded .notice-content{display:block;}
 
-/* ====== 新增：复选框与批量操作栏 ====== */
 .checkbox { width: 16px; height: 16px; cursor: pointer; accent-color: var(--accent); margin: 0 2px; }
 .batch-bar {
   position:fixed; bottom:56px; left:0; right:0; z-index:100;
