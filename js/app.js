@@ -660,7 +660,13 @@ window.executeFetchPrices = async (selectedIds) => {
       const url = s.apiEndpoint.replace(/\/+$/, "") + "/api/pricing";
       const controller = new AbortController(); 
       const timeoutId = setTimeout(() => controller.abort(), 8000);
-      const res = await fetchWithProxy(url, { signal: controller.signal }); 
+      
+      // 【新增】请求模型价格时，带上访问令牌和用户ID
+      const headers = {};
+      if (s.accessToken) headers["Authorization"] = "Bearer " + s.accessToken;
+      if (s.userId) headers["New-Api-User"] = s.userId;
+      
+      const res = await fetchWithProxy(url, { signal: controller.signal, headers }); 
       clearTimeout(timeoutId);
       
       if (res.ok) {
