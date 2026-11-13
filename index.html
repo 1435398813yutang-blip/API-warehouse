@@ -44,6 +44,11 @@
       <div class="filter-content" id="regFilterContent" style="display:none">
         <div class="filter-block"><span class="filter-label">分组</span><div class="chip-row" id="regGroupFilter"></div></div>
         <div class="filter-block"><span class="filter-label">标签（可多选）</span><div class="chip-row" id="regTagFilter"></div></div>
+        <!-- 收录站点全选按钮 -->
+        <div style="margin-top:12px; display:flex; gap:8px;">
+          <button class="btn" style="padding:6px; font-size:12px;" id="btnSelectAllReg">全选当前结果</button>
+          <button class="btn primary" style="padding:6px; font-size:12px;" id="btnBatchAddReg">一键添加选中</button>
+        </div>
       </div>
     </div>
     <div class="reg-body" id="regList"></div>
@@ -59,16 +64,19 @@
     <div class="filter-content" id="filterContent" style="display:none">
       <div class="filter-block"><span class="filter-label">分组</span><div class="chip-row" id="groupFilter"></div></div>
       <div class="filter-block"><span class="filter-label">标签（可多选）</span><div class="chip-row" id="tagFilter"></div></div>
-      <div class="sort-row">
-        <span>排序</span>
-        <select id="sortSelect">
-          <option value="custom">默认（常用优先）</option>
-          <option value="name-asc">名称 A→Z</option>
-          <option value="name-desc">名称 Z→A</option>
-          <option value="balance-desc">余额高→低</option>
-          <option value="balance-asc">余额低→高</option>
-          <option value="recent">最近打开</option>
-        </select>
+      <div class="sort-row" style="display:flex; justify-content:space-between; align-items:center;">
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span>排序</span>
+          <select id="sortSelect">
+            <option value="custom">默认（常用优先）</option>
+            <option value="name-asc">名称 A→Z</option>
+            <option value="name-desc">名称 Z→A</option>
+            <option value="balance-desc">余额高→低</option>
+            <option value="balance-asc">余额低→高</option>
+            <option value="recent">最近打开</option>
+          </select>
+        </div>
+        <button class="btn" style="padding:4px 8px; font-size:12px; width:auto; margin:0;" id="btnSelectAllMy">全选当前结果</button>
       </div>
     </div>
   </div>
@@ -95,18 +103,9 @@
         <span class="arrow" id="modelFilterArrow">▼</span>
       </div>
       <div class="filter-content" id="modelFilterContent" style="display:none">
-        <div class="filter-block">
-          <span class="filter-label">供应商</span>
-          <div class="chip-row" id="providerFilter"></div>
-        </div>
-        <div class="filter-block">
-          <span class="filter-label">计费类型</span>
-          <div class="chip-row" id="priceTypeFilter"></div>
-        </div>
-        <div class="filter-block" id="siteFilterBlock">
-          <span class="filter-label">来源站点</span>
-          <div class="chip-row" id="siteFilter"></div>
-        </div>
+        <div class="filter-block"><span class="filter-label">供应商</span><div class="chip-row" id="providerFilter"></div></div>
+        <div class="filter-block"><span class="filter-label">计费类型</span><div class="chip-row" id="priceTypeFilter"></div></div>
+        <div class="filter-block"><span class="filter-label">来源站点</span><div class="chip-row" id="siteFilter"></div></div>
       </div>
     </div>
   </div>
@@ -114,10 +113,19 @@
 </div>
 
 <!-- ===== 底部导航 ===== -->
-<nav class="bottom-nav">
+<nav class="bottom-nav" id="bottomNav">
   <div class="nav-item active" data-tab="warehouse">仓库</div>
   <div class="nav-item" data-tab="models">模型</div>
 </nav>
+
+<!-- ===== 批量操作悬浮栏 ===== -->
+<div class="batch-bar" id="batchBar">
+  <div class="batch-info">已选 <span id="selCount">0</span> 项</div>
+  <div class="batch-actions">
+    <button class="btn-plain" onclick="clearSelection()">取消</button>
+    <button class="btn-primary" onclick="openBatchModal()">批量操作</button>
+  </div>
+</div>
 
 <div class="modal-mask" id="modalMask">
   <div class="modal" id="modalBox"></div>
@@ -126,16 +134,9 @@
 
 <script src="js/app.js"></script>
 <script>
-  // 注册 PWA Service Worker
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
-      navigator.serviceWorker.register('./sw.js')
-        .then(registration => {
-          console.log('PWA Service Worker 注册成功:', registration.scope);
-        })
-        .catch(error => {
-          console.log('PWA Service Worker 注册失败:', error);
-        });
+      navigator.serviceWorker.register('./sw.js').catch(e => console.log(e));
     });
   }
 </script>
