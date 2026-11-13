@@ -11,7 +11,6 @@
 <body>
 <div id="wallpaper"></div>
 
-<!-- ===== 仓库页 ===== -->
 <div class="page active" id="page-warehouse">
   <header class="topbar">
     <h1 id="appName">API小仓库</h1>
@@ -44,7 +43,7 @@
       <div class="filter-content" id="regFilterContent" style="display:none">
         <div class="filter-block"><span class="filter-label">分组</span><div class="chip-row" id="regGroupFilter"></div></div>
         <div class="filter-block"><span class="filter-label">标签（可多选）</span><div class="chip-row" id="regTagFilter"></div></div>
-        <!-- 收录站点全选按钮 -->
+        
         <div style="margin-top:12px; display:flex; gap:8px;">
           <button class="btn" style="padding:6px; font-size:12px;" id="btnSelectAllReg">全选当前结果</button>
           <button class="btn primary" style="padding:6px; font-size:12px;" id="btnBatchAddReg">一键添加选中</button>
@@ -85,7 +84,6 @@
   <button class="fab" id="btnAdd" title="添加站点">+</button>
 </div>
 
-<!-- ===== 模型页 ===== -->
 <div class="page" id="page-models">
   <div class="model-header">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
@@ -103,27 +101,34 @@
         <span class="arrow" id="modelFilterArrow">▼</span>
       </div>
       <div class="filter-content" id="modelFilterContent" style="display:none">
-        <div class="filter-block"><span class="filter-label">供应商</span><div class="chip-row" id="providerFilter"></div></div>
-        <div class="filter-block"><span class="filter-label">计费类型</span><div class="chip-row" id="priceTypeFilter"></div></div>
-        <div class="filter-block"><span class="filter-label">来源站点</span><div class="chip-row" id="siteFilter"></div></div>
+        <div class="filter-block">
+          <span class="filter-label">供应商</span>
+          <div class="chip-row" id="providerFilter"></div>
+        </div>
+        <div class="filter-block">
+          <span class="filter-label">计费类型</span>
+          <div class="chip-row" id="priceTypeFilter"></div>
+        </div>
+        <div class="filter-block" id="siteFilterBlock">
+          <span class="filter-label">来源站点</span>
+          <div class="chip-row" id="siteFilter"></div>
+        </div>
       </div>
     </div>
   </div>
   <div class="model-list" id="modelList"></div>
 </div>
 
-<!-- ===== 底部导航 ===== -->
 <nav class="bottom-nav" id="bottomNav">
   <div class="nav-item active" data-tab="warehouse">仓库</div>
   <div class="nav-item" data-tab="models">模型</div>
 </nav>
 
-<!-- ===== 批量操作悬浮栏 ===== -->
 <div class="batch-bar" id="batchBar">
   <div class="batch-info">已选 <span id="selCount">0</span> 项</div>
   <div class="batch-actions">
-    <button class="btn-plain" onclick="clearSelection()">取消</button>
-    <button class="btn-primary" onclick="openBatchModal()">批量操作</button>
+    <button class="btn-plain" id="btnClearSel">取消</button>
+    <button class="btn-primary" id="btnOpenBatch">批量操作</button>
   </div>
 </div>
 
