@@ -531,9 +531,14 @@ function renderModelList() {
   if (state.siteFilter.length) list = list.filter(m => state.siteFilter.includes(m.siteName));
   if (state.priceTypeFilter.length) list = list.filter(m => state.priceTypeFilter.includes(m.priceType));
   list.sort((a, b) => (a.cnyPrice || 0) - (b.cnyPrice || 0));
+  
   if (!list.length) { wrap.innerHTML = `<div class="empty">暂无数据<br>点击右上角「更新价格」拉取，或更改筛选条件。</div>`; return; }
   
-  wrap.innerHTML = list.map(m => {
+  // 性能优化：只渲染前 200 条，防止手机上因为 DOM 太多卡顿
+  const renderLimit = 200;
+  const renderList = list.slice(0, renderLimit);
+
+  wrap.innerHTML = renderList.map(m => {
     let html = `<div class="model-card" onclick="openModelDrawer('${m.siteId}')">
       <div class="model-info">
         <div class="model-name">${esc(m.modelName)}</div>
@@ -548,6 +553,10 @@ function renderModelList() {
     html += `</div></div>`;
     return html;
   }).join("");
+  
+  if (list.length > renderLimit) {
+    wrap.innerHTML += `<div style="text-align:center; font-size:12px; color:var(--text-2); padding:16px;">为保证流畅，仅显示前 ${renderLimit} 条数据。请使用搜索或筛选功能查看更精确的结果。</div>`;
+  }
 }
 
 window.openModelDrawer = (siteId) => {
