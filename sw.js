@@ -31,11 +31,9 @@ self.addEventListener('activate', (e) => {
 });
 
 self.addEventListener('fetch', (e) => {
-  // 如果是请求接口数据（包括 registry.json 或者代理请求），不缓存，直接走网络
   if (e.request.url.includes('registry.json') || e.request.url.includes('?target=')) {
     return; 
   }
-
   e.respondWith(
     fetch(e.request)
       .then((response) => {
