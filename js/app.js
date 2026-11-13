@@ -31,7 +31,8 @@ const state = {
   filterGroup: "all", filterTags: [], search: "", modelSearch: "",
   providerFilter: [], priceTypeFilter: [], siteFilter: [],
   regFilterGroup: "all", regFilterTags: [], regCollapsed: [],
-  selectedMyIds: new Set(), selectedRegIds: new Set()
+  selectedMyIds: new Set(), selectedRegIds: new Set(),
+  fetchDrawerGroup: "all", fetchDrawerSelectedIds: new Set()
 };
 
 function uid() { return "s_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
@@ -534,7 +535,6 @@ function renderModelList() {
   
   if (!list.length) { wrap.innerHTML = `<div class="empty">暂无数据<br>点击右上角「更新价格」拉取，或更改筛选条件。</div>`; return; }
   
-  // 性能优化：只渲染前 200 条，防止手机上因为 DOM 太多卡顿
   const renderLimit = 200;
   const renderList = list.slice(0, renderLimit);
 
@@ -577,30 +577,88 @@ window.openModelDrawer = (siteId) => {
   `);
 };
 
+// ====== 全新的更新价格抽屉 ======
+window.updateFetchDrawerUI = () => {
+  const wrap = document.getElementById("fetchSiteList");
+  const groupsWrap = document.getElementById("fetchGroupChips");
+  if(!wrap || !groupsWrap) return;
+
+  // 渲染分组标签
+  const groups = ["全部", ...new Set(state.sites.map(s => s.group))].filter(Boolean);
+  groupsWrap.innerHTML = groups.map(g => {
+    const isActive = state.fetchDrawerGroup === g;
+    // 检查当前分组是否全选
+    const groupSites = g === "全部" ? state.sites : state.sites.filter(s => s.group === g);
+    const isAllSelected = groupSites.length > 0 && groupSites.every(s => state.fetchDrawerSelectedIds.has(s.id));
+    
+    return `<span class="chip ${isActive ? 'active' : ''}" data-group="${esc(g)}" style="position:relative;">
+      ${esc(g)}
+      ${isAllSelected && groupSites.length > 0 ? '<span style="position:absolute; top:-4px; right:-4px; width:8px; height:8px; background:#4caf50; border-radius:50%;"></span>' : ''}
+    </span>`;
+  }).join("");
+
+  // 绑定分组标签点击事件
+  groupsWrap.querySelectorAll(".chip").forEach(c => {
+    c.onclick = () => {
+      state.fetchDrawerGroup = c.dataset.group;
+      updateFetchDrawerUI();
+    };
+  });
+
+  // 过滤要显示的站点列表
+  let displaySites = state.sites;
+  if (state.fetchDrawerGroup !== "全部") {
+    displaySites = state.sites.filter(s => s.group === state.fetchDrawerGroup);
+  }
+
+  // 渲染站点列表
+  if (!displaySites.length) {
+    wrap.innerHTML = `<div style="text-align:center; color:#999; padding:20px; font-size:13px;">该分组下暂无站点</div>`;
+  } else {
+    wrap.innerHTML = displaySites.map(s => `
+      <label style="display:flex; align-items:center; gap:8px; padding:8px 0; border-bottom:1px dashed #eee; cursor:pointer;">
+        <input type="checkbox" class="f-check" value="${s.id}" ${state.fetchDrawerSelectedIds.has(s.id) ? 'checked' : ''} style="width:16px; height:16px; accent-color:var(--accent);">
+        <span style="font-size:14px; flex:1;">${esc(s.name)} <span style="color:var(--text-2); font-size:12px;">(${esc(s.group||'未分组')})</span></span>
+      </label>
+    `).join("");
+
+    // 绑定复选框事件
+    wrap.querySelectorAll(".f-check").forEach(cb => {
+      cb.onchange = (e) => {
+        if (e.target.checked) state.fetchDrawerSelectedIds.add(e.target.value);
+        else state.fetchDrawerSelectedIds.delete(e.target.value);
+        updateFetchDrawerUI(); // 重新渲染以更新红点
+      };
+    });
+  }
+
+  // 更新底部按钮文字
+  const btn = document.getElementById("btnExecuteFetch");
+  if (btn) {
+    btn.textContent = `开始更新 (已选 ${state.fetchDrawerSelectedIds.size} 个)`;
+    btn.disabled = state.fetchDrawerSelectedIds.size === 0;
+    btn.style.opacity = btn.disabled ? "0.5" : "1";
+  }
+};
+
 window.openFetchPricesDrawer = () => {
-  const groups = [...new Set(state.sites.map(s => s.group))].filter(Boolean);
-  
+  state.fetchDrawerGroup = "全部";
+  state.fetchDrawerSelectedIds = new Set(state.sites.map(s => s.id)); // 默认全选
+
   showModal(`
     <h3>更新价格</h3>
-    <div style="margin-bottom:12px; display:flex; gap:8px;">
-      <button class="btn" style="flex:1; padding:6px; font-size:13px;" id="btnFetchAll">全选</button>
-      <button class="btn" style="flex:1; padding:6px; font-size:13px;" id="btnFetchNone">取消</button>
-    </div>
+    
     <div style="margin-bottom:12px;">
-      <div style="font-size:12px; color:var(--text-2); margin-bottom:6px;">按分组快捷选择</div>
-      <div class="chip-row" id="fetchGroupChips">
-        ${groups.map(g => `<span class="chip" data-group="${esc(g)}">${esc(g)}</span>`).join("")}
-      </div>
+      <div style="font-size:12px; color:var(--text-2); margin-bottom:6px;">按分组筛选</div>
+      <div class="chip-row" id="fetchGroupChips"></div>
+    </div>
+
+    <div style="display:flex; gap:8px; margin-bottom:12px;">
+      <button class="btn" style="flex:1; padding:6px; font-size:13px;" id="btnFetchSelectAll">全选当前列表</button>
+      <button class="btn" style="flex:1; padding:6px; font-size:13px;" id="btnFetchDeselectAll">取消当前列表</button>
     </div>
     
-    <div style="max-height:40vh; overflow-y:auto; margin-bottom:12px; background:#fff; border:1.5px solid var(--border); border-radius:var(--radius); padding:0 12px;" id="fetchSiteList">
-      ${state.sites.map(s => `
-        <label style="display:flex; align-items:center; gap:8px; padding:8px 0; border-bottom:1px dashed #eee; cursor:pointer;">
-          <input type="checkbox" class="f-check" value="${s.id}" checked style="width:16px; height:16px; accent-color:var(--accent);">
-          <span style="font-size:14px; flex:1;">${esc(s.name)} <span style="color:var(--text-2); font-size:12px;">(${esc(s.group||'未分组')})</span></span>
-        </label>
-      `).join("")}
-    </div>
+    <div style="max-height:35vh; overflow-y:auto; margin-bottom:12px; background:#fff; border:1.5px solid var(--border); border-radius:var(--radius); padding:0 12px;" id="fetchSiteList"></div>
 
     <div style="font-size:12px; color:var(--danger); background:#fdf5f5; padding:8px; border-radius:4px; margin-bottom:12px; line-height:1.5;">
       💡 提示：部分站点可能因接口限制或网络问题导致拉取失败。更新失败将保留原有数据；更新成功但返回空列表，则会清空该站旧数据。
@@ -608,38 +666,35 @@ window.openFetchPricesDrawer = () => {
 
     <div class="btn-row" style="margin-top:0;">
       <button class="btn" onclick="closeModal()">取消</button>
-      <button class="btn primary" id="btnExecuteFetch">开始更新</button>
+      <button class="btn primary" id="btnExecuteFetch" onclick="executeFetchPrices()">开始更新</button>
     </div>
   `);
 
-  document.getElementById("btnFetchAll").onclick = () => {
-    document.querySelectorAll(".f-check").forEach(cb => cb.checked = true);
+  document.getElementById("btnFetchSelectAll").onclick = () => {
+    let displaySites = state.sites;
+    if (state.fetchDrawerGroup !== "全部") {
+      displaySites = state.sites.filter(s => s.group === state.fetchDrawerGroup);
+    }
+    displaySites.forEach(s => state.fetchDrawerSelectedIds.add(s.id));
+    updateFetchDrawerUI();
   };
-  document.getElementById("btnFetchNone").onclick = () => {
-    document.querySelectorAll(".f-check").forEach(cb => cb.checked = false);
+  
+  document.getElementById("btnFetchDeselectAll").onclick = () => {
+    let displaySites = state.sites;
+    if (state.fetchDrawerGroup !== "全部") {
+      displaySites = state.sites.filter(s => s.group === state.fetchDrawerGroup);
+    }
+    displaySites.forEach(s => state.fetchDrawerSelectedIds.delete(s.id));
+    updateFetchDrawerUI();
   };
 
-  document.querySelectorAll("#fetchGroupChips .chip").forEach(chip => {
-    chip.onclick = () => {
-      const g = chip.dataset.group;
-      state.sites.filter(s => s.group === g).forEach(s => {
-        const cb = document.querySelector(`.f-check[value="${s.id}"]`);
-        if(cb) cb.checked = true;
-      });
-    };
-  });
-
-  document.getElementById("btnExecuteFetch").onclick = () => {
-    const selectedIds = [];
-    document.querySelectorAll(".f-check:checked").forEach(cb => {
-      selectedIds.push(cb.value);
-    });
-    if (!selectedIds.length) return toast("请至少选择一个站点");
-    executeFetchPrices(selectedIds);
-  };
+  updateFetchDrawerUI();
 };
 
-window.executeFetchPrices = async (selectedIds) => {
+window.executeFetchPrices = async () => {
+  const selectedIds = [...state.fetchDrawerSelectedIds];
+  if (!selectedIds.length) return toast("请至少选择一个站点");
+  
   closeModal();
   const sitesToFetch = state.sites.filter(s => selectedIds.includes(s.id));
   
@@ -661,7 +716,6 @@ window.executeFetchPrices = async (selectedIds) => {
       const controller = new AbortController(); 
       const timeoutId = setTimeout(() => controller.abort(), 8000);
       
-      // 【新增】请求模型价格时，带上访问令牌和用户ID
       const headers = {};
       if (s.accessToken) headers["Authorization"] = "Bearer " + s.accessToken;
       if (s.userId) headers["New-Api-User"] = s.userId;
@@ -702,7 +756,6 @@ window.executeFetchPrices = async (selectedIds) => {
     }
   }
 
-  // ==== 合并数据逻辑 ====
   const remainPrices = state.modelPrices.filter(p => !successIds.includes(p.siteId));
   state.modelPrices = [...remainPrices, ...newPrices];
   
