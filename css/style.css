@@ -214,3 +214,24 @@ main{padding:4px 16px 20px;position:relative;z-index:10}
 .batch-actions { display:flex; gap:8px; }
 .btn-plain{background:transparent;color:var(--text);border:1.5px solid var(--border);padding:6px 12px;border-radius:var(--radius);font-size:13px;cursor:pointer;}
 .btn-primary{background:var(--accent);color:#fff;border:1.5px solid var(--accent);padding:6px 12px;border-radius:var(--radius);font-size:13px;cursor:pointer;}
+/* v1.2.0 新增：模型分组标签样式 */
+.group-tag {
+  display: inline-block;
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(138, 155, 168, 0.15);
+  color: var(--accent);
+  margin-left: 6px;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.2s;
+}
+.group-tag:active {
+  opacity: 0.7;
+}
+.group-tag.warning {
+  background: rgba(255, 152, 0, 0.15);
+  color: #ff9800;
+  border-color: rgba(255, 152, 0, 0.3);
+}
