@@ -3,6 +3,7 @@ const KEY_SITES = "axc_sites_v1";
 const KEY_SETTINGS = "axc_settings_v1";
 const KEY_PRICES = "axc_prices_v1";
 const KEY_READ_NOTICES = "axc_read_notices_v1";
+const KEY_CUSTOM_RATIOS = "axc_custom_ratios_v1"; // v1.2.0 新增：自定义分组倍率
 let REGISTRY = { notice: [], contact: [], presetGroups: [], presetTags: [], sites: [] };
 
 function defaultSettings() {
@@ -23,7 +24,9 @@ const store = {
   getPrices() { try { return JSON.parse(localStorage.getItem(KEY_PRICES) || "[]"); } catch { return []; } },
   savePrices(prices) { localStorage.setItem(KEY_PRICES, JSON.stringify(prices)); },
   getReadNotices() { try { return JSON.parse(localStorage.getItem(KEY_READ_NOTICES) || "[]"); } catch { return []; } },
-  saveReadNotices(ids) { localStorage.setItem(KEY_READ_NOTICES, JSON.stringify(ids)); }
+  saveReadNotices(ids) { localStorage.setItem(KEY_READ_NOTICES, JSON.stringify(ids)); },
+  getCustomRatios() { try { return JSON.parse(localStorage.getItem(KEY_CUSTOM_RATIOS) || "{}"); } catch { return {}; } },
+  saveCustomRatios(r) { localStorage.setItem(KEY_CUSTOM_RATIOS, JSON.stringify(r)); }
 };
 
 const state = {
@@ -32,7 +35,8 @@ const state = {
   providerFilter: [], priceTypeFilter: [], siteFilter: [],
   regFilterGroup: "all", regFilterTags: [], regCollapsed: [],
   selectedMyIds: new Set(), selectedRegIds: new Set(),
-  fetchDrawerGroup: "all", fetchDrawerSelectedIds: new Set()
+  fetchDrawerGroup: "all", fetchDrawerSelectedIds: new Set(),
+  customGroupRatios: {} // v1.2.0 内存中存储自定义倍率
 };
 
 function uid() { return "s_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
@@ -82,7 +86,11 @@ async function init() {
     }
   } catch (err) {}
 
-  state.settings = store.getSettings(); state.sites = store.getSites(); state.modelPrices = store.getPrices();
+  state.settings = store.getSettings(); 
+  state.sites = store.getSites(); 
+  state.modelPrices = store.getPrices();
+  state.customGroupRatios = store.getCustomRatios(); // 加载自定义倍率
+
   const today = todayStr(); let changed = false;
   state.sites.forEach(s => { if (s.todayCheckedIn && s.lastCheckinDate !== today) { s.todayCheckedIn = false; changed = true; } });
   if (changed) store.saveSites(state.sites);
@@ -523,14 +531,106 @@ function renderSiteFilter() {
   wrap.querySelectorAll(".chip").forEach(c => { c.onclick = () => { const s = c.dataset.s; if (s === "all") state.siteFilter = []; else { const idx = state.siteFilter.indexOf(s); if (idx >= 0) state.siteFilter.splice(idx, 1); else state.siteFilter.push(s); } renderSiteFilter(); renderModelList(); }; });
 }
 
+// v1.2.0 获取应用于计算的倍率
+function getAppliedRatio(siteId, groupName, apiRatio) {
+  const key = siteId + "_" + groupName;
+  const custom = state.customGroupRatios[key];
+  let finalRatio = 1;
+  let isWarning = false;
+
+  if (custom !== undefined) {
+    finalRatio = parseFloat(custom);
+    // 如果接口有倍率且跟手填的不一样，触发警告
+    if (apiRatio !== undefined && apiRatio !== null && parseFloat(apiRatio) !== finalRatio) {
+      isWarning = true;
+    }
+  } else {
+    finalRatio = (apiRatio !== undefined && apiRatio !== null) ? parseFloat(apiRatio) : 1;
+  }
+  return { ratio: finalRatio, isWarning };
+}
+
+window.openGroupRatioModal = (siteId, siteName, groupName, apiRatio) => {
+  const key = siteId + "_" + groupName;
+  const custom = state.customGroupRatios[key];
+  const current = custom !== undefined ? custom : (apiRatio !== undefined && apiRatio !== null ? apiRatio : 1);
+  
+  let warningHtml = "";
+  if (custom !== undefined && apiRatio !== undefined && apiRatio !== null && parseFloat(apiRatio) !== parseFloat(custom)) {
+    warningHtml = `<div style="background:#fff3e0; color:#e65100; padding:8px; border-radius:4px; font-size:12px; margin-bottom:12px; line-height:1.5;">
+      ⚠️ 站点接口倍率已变更为 <b>${apiRatio}x</b>。<br>你当前手动锁定的是 <b>${custom}x</b>。
+    </div>`;
+  }
+
+  showModal(`
+    <h3>设置分组倍率</h3>
+    <div style="font-size:13px; margin-bottom:12px; color:var(--text-2);">
+      站点：<b>${esc(siteName)}</b><br>
+      分组：<span class="group-tag" style="margin-left:0;">${esc(groupName)}</span>
+    </div>
+    ${warningHtml}
+    <div class="field">
+      <label>计费倍率 (1 表示基础价，2 表示两倍)</label>
+      <input type="number" id="f-group-ratio" value="${current}" step="0.01" style="width:100%; padding:10px; border:1.5px solid var(--border); border-radius:var(--radius);">
+    </div>
+    <div style="font-size:12px; color:#999; margin-bottom:16px;">修改后，该站点此分组下的所有模型将同步更新价格。</div>
+    <div class="btn-row">
+      <button class="btn" onclick="closeModal()">取消</button>
+      <button class="btn primary" id="btnSaveGroupRatio">应用倍率</button>
+    </div>
+  `);
+
+  document.getElementById("btnSaveGroupRatio").onclick = () => {
+    const val = parseFloat(document.getElementById("f-group-ratio").value);
+    if (isNaN(val) || val <= 0) { toast("请输入有效的正数"); return; }
+    state.customGroupRatios[key] = val;
+    store.saveCustomRatios(state.customGroupRatios);
+    closeModal();
+    renderModelList();
+    toast(`已将 ${groupName} 分组倍率设为 ${val}x`);
+  };
+};
+
 function renderModelList() {
   const wrap = document.getElementById("modelList"); if (!wrap) return;
   renderProviderFilter(); renderPriceTypeFilter(); renderSiteFilter();
+  
   let list = state.modelPrices.slice();
+  
+  // v1.2.0：重新计算每个条目的真实价格
+  list = list.map(m => {
+    const site = state.sites.find(s => s.id === m.siteId) || { modelRatio: 1 };
+    const siteRate = site.modelRatio || 1;
+    
+    // 获取最终倍率与警告状态
+    const ratioInfo = getAppliedRatio(m.siteId, m.groupName, m.apiGroupRatio);
+    
+    let cnyInput = 0, cnyOutput = 0, cnyPrice = 0;
+    
+    if (m.priceType === "按量") {
+      // 按量 = (底层倍率 * 2) * 分组倍率 * 基础人民币比例
+      const rawInWithGroup = m.rawInput * ratioInfo.ratio;
+      const rawOutWithGroup = m.rawOutput * ratioInfo.ratio;
+      cnyInput = rawInWithGroup * siteRate;
+      cnyOutput = rawOutWithGroup * siteRate;
+      cnyPrice = cnyInput;
+      
+      return { ...m, displayGroupRatio: ratioInfo.ratio, isWarning: ratioInfo.isWarning, cnyInput, cnyOutput, cnyPrice, displayRawInput: rawInWithGroup, displayRawOutput: rawOutWithGroup };
+    } else {
+      // 按次 = 原始按次价格 * 分组倍率 * 基础人民币比例
+      const rawPriceWithGroup = m.rawInput * ratioInfo.ratio;
+      cnyInput = rawPriceWithGroup * siteRate;
+      cnyPrice = cnyInput;
+      
+      return { ...m, displayGroupRatio: ratioInfo.ratio, isWarning: ratioInfo.isWarning, cnyInput, cnyOutput: 0, cnyPrice, displayRawInput: rawPriceWithGroup, displayRawOutput: 0 };
+    }
+  });
+
   if (state.modelSearch.trim()) { const q = state.modelSearch.trim().toLowerCase(); list = list.filter(m => (m.modelName||"").toLowerCase().includes(q) || (m.siteName||"").toLowerCase().includes(q)); }
   if (state.providerFilter.length) list = list.filter(m => state.providerFilter.includes(getProvider(m.modelName)));
   if (state.siteFilter.length) list = list.filter(m => state.siteFilter.includes(m.siteName));
   if (state.priceTypeFilter.length) list = list.filter(m => state.priceTypeFilter.includes(m.priceType));
+  
   list.sort((a, b) => (a.cnyPrice || 0) - (b.cnyPrice || 0));
   
   if (!list.length) { wrap.innerHTML = `<div class="empty">暂无数据<br>点击右上角「更新价格」拉取，或更改筛选条件。</div>`; return; }
@@ -539,16 +639,24 @@ function renderModelList() {
   const renderList = list.slice(0, renderLimit);
 
   wrap.innerHTML = renderList.map(m => {
+    const warnClass = m.isWarning ? "warning" : "";
+    const tagTitle = m.isWarning ? "接口倍率与手动设定冲突，点击查看" : "点击修改分组倍率";
+    
     let html = `<div class="model-card" onclick="openModelDrawer('${m.siteId}')">
       <div class="model-info">
         <div class="model-name">${esc(m.modelName)}</div>
-        <div class="model-meta">${esc(m.siteName)} | ${m.priceType}</div>
+        <div class="model-meta">
+          ${esc(m.siteName)} | ${m.priceType}
+          <span class="group-tag ${warnClass}" onclick="event.stopPropagation(); openGroupRatioModal('${m.siteId}', '${esc(m.siteName)}', '${esc(m.groupName||'默认')}', ${m.apiGroupRatio !== undefined ? m.apiGroupRatio : 'null'})" title="${tagTitle}">
+            ${esc(m.groupName||'默认')} | ${m.displayGroupRatio}x ${m.isWarning ? '⚠️' : ''}
+          </span>
+        </div>
       </div>
       <div class="model-price" style="text-align:right;">`;
     if (m.priceType === "按量") {
-      html += `输入: ￥${(m.cnyInput || 0).toFixed(4)} / 1M<br>输出: ￥${(m.cnyOutput || 0).toFixed(4)} / 1M<br><span style="font-size:11px;color:#999;font-weight:normal;">(额度: ${m.rawInput.toFixed(2)} / ${m.rawOutput.toFixed(2)})</span>`;
+      html += `输入: ￥${(m.cnyInput || 0).toFixed(4)} / 1M<br>输出: ￥${(m.cnyOutput || 0).toFixed(4)} / 1M<br><span style="font-size:11px;color:#999;font-weight:normal;">(额度: ${m.displayRawInput.toFixed(2)} / ${m.displayRawOutput.toFixed(2)})</span>`;
     } else {
-      html += `￥${(m.cnyInput || 0).toFixed(4)} / 次<br><span style="font-size:11px;color:#999;font-weight:normal;">(额度: ${m.rawInput})</span>`;
+      html += `￥${(m.cnyInput || 0).toFixed(4)} / 次<br><span style="font-size:11px;color:#999;font-weight:normal;">(额度: ${m.displayRawInput})</span>`;
     }
     html += `</div></div>`;
     return html;
@@ -577,17 +685,15 @@ window.openModelDrawer = (siteId) => {
   `);
 };
 
-// ====== 全新的更新价格抽屉 ======
+// ====== 更新价格抽屉 ======
 window.updateFetchDrawerUI = () => {
   const wrap = document.getElementById("fetchSiteList");
   const groupsWrap = document.getElementById("fetchGroupChips");
   if(!wrap || !groupsWrap) return;
 
-  // 渲染分组标签
   const groups = ["全部", ...new Set(state.sites.map(s => s.group))].filter(Boolean);
   groupsWrap.innerHTML = groups.map(g => {
     const isActive = state.fetchDrawerGroup === g;
-    // 检查当前分组是否全选
     const groupSites = g === "全部" ? state.sites : state.sites.filter(s => s.group === g);
     const isAllSelected = groupSites.length > 0 && groupSites.every(s => state.fetchDrawerSelectedIds.has(s.id));
     
@@ -597,7 +703,6 @@ window.updateFetchDrawerUI = () => {
     </span>`;
   }).join("");
 
-  // 绑定分组标签点击事件
   groupsWrap.querySelectorAll(".chip").forEach(c => {
     c.onclick = () => {
       state.fetchDrawerGroup = c.dataset.group;
@@ -605,13 +710,11 @@ window.updateFetchDrawerUI = () => {
     };
   });
 
-  // 过滤要显示的站点列表
   let displaySites = state.sites;
   if (state.fetchDrawerGroup !== "全部") {
     displaySites = state.sites.filter(s => s.group === state.fetchDrawerGroup);
   }
 
-  // 渲染站点列表
   if (!displaySites.length) {
     wrap.innerHTML = `<div style="text-align:center; color:#999; padding:20px; font-size:13px;">该分组下暂无站点</div>`;
   } else {
@@ -622,17 +725,15 @@ window.updateFetchDrawerUI = () => {
       </label>
     `).join("");
 
-    // 绑定复选框事件
     wrap.querySelectorAll(".f-check").forEach(cb => {
       cb.onchange = (e) => {
         if (e.target.checked) state.fetchDrawerSelectedIds.add(e.target.value);
         else state.fetchDrawerSelectedIds.delete(e.target.value);
-        updateFetchDrawerUI(); // 重新渲染以更新红点
+        updateFetchDrawerUI();
       };
     });
   }
 
-  // 更新底部按钮文字
   const btn = document.getElementById("btnExecuteFetch");
   if (btn) {
     btn.textContent = `开始更新 (已选 ${state.fetchDrawerSelectedIds.size} 个)`;
@@ -643,27 +744,22 @@ window.updateFetchDrawerUI = () => {
 
 window.openFetchPricesDrawer = () => {
   state.fetchDrawerGroup = "全部";
-  state.fetchDrawerSelectedIds = new Set(state.sites.map(s => s.id)); // 默认全选
+  state.fetchDrawerSelectedIds = new Set(state.sites.map(s => s.id));
 
   showModal(`
     <h3>更新价格</h3>
-    
     <div style="margin-bottom:12px;">
       <div style="font-size:12px; color:var(--text-2); margin-bottom:6px;">按分组筛选</div>
       <div class="chip-row" id="fetchGroupChips"></div>
     </div>
-
     <div style="display:flex; gap:8px; margin-bottom:12px;">
       <button class="btn" style="flex:1; padding:6px; font-size:13px;" id="btnFetchSelectAll">全选当前列表</button>
       <button class="btn" style="flex:1; padding:6px; font-size:13px;" id="btnFetchDeselectAll">取消当前列表</button>
     </div>
-    
     <div style="max-height:35vh; overflow-y:auto; margin-bottom:12px; background:#fff; border:1.5px solid var(--border); border-radius:var(--radius); padding:0 12px;" id="fetchSiteList"></div>
-
     <div style="font-size:12px; color:var(--danger); background:#fdf5f5; padding:8px; border-radius:4px; margin-bottom:12px; line-height:1.5;">
       💡 提示：部分站点可能因接口限制或网络问题导致拉取失败。更新失败将保留原有数据；更新成功但返回空列表，则会清空该站旧数据。
     </div>
-
     <div class="btn-row" style="margin-top:0;">
       <button class="btn" onclick="closeModal()">取消</button>
       <button class="btn primary" id="btnExecuteFetch" onclick="executeFetchPrices()">开始更新</button>
@@ -730,18 +826,38 @@ window.executeFetchPrices = async () => {
           items.forEach(item => {
             const modelName = item.model_name || item.model || item.id; 
             if(!modelName) return;
+            
             const mRatio = parseFloat(item.model_ratio || item.ratio) || 0;
             const cRatio = parseFloat(item.completion_ratio) || mRatio;
             const mPrice = parseFloat(item.model_price || item.price);
-            const rate = s.modelRatio || 1;
             
-            if (mRatio > 0) {
-              const rawIn = mRatio * 2; 
-              const rawOut = rawIn * cRatio; 
-              newPrices.push({ siteId: s.id, siteName: s.name, modelName, priceType: "按量", rawInput: rawIn, rawOutput: rawOut, cnyInput: rawIn * rate, cnyOutput: rawOut * rate, cnyPrice: rawIn * rate });
-            } else if (!isNaN(mPrice)) {
-              newPrices.push({ siteId: s.id, siteName: s.name, modelName, priceType: "按次", rawInput: mPrice, rawOutput: 0, cnyInput: mPrice * rate, cnyOutput: 0, cnyPrice: mPrice * rate });
+            // v1.2.0 分组解析逻辑
+            let groups = ["默认"];
+            if (item.enable_groups && Array.isArray(item.enable_groups) && item.enable_groups.length > 0) {
+              groups = item.enable_groups;
             }
+            const groupRatios = item.group_ratio || {}; // 尝试读取倍率字典
+
+            groups.forEach(gName => {
+              const apiGroupRatio = groupRatios[gName] !== undefined ? parseFloat(groupRatios[gName]) : null;
+              const baseId = s.id + "_" + gName; // 用于唯一标识
+
+              if (mRatio > 0) {
+                const rawIn = mRatio * 2; 
+                const rawOut = rawIn * cRatio; 
+                newPrices.push({ 
+                  id: baseId + "_" + modelName + "_vol", // 生成唯一ID防冲突
+                  siteId: s.id, siteName: s.name, modelName, groupName: gName, apiGroupRatio: apiGroupRatio,
+                  priceType: "按量", rawInput: rawIn, rawOutput: rawOut
+                });
+              } else if (!isNaN(mPrice) && mPrice > 0) {
+                newPrices.push({ 
+                  id: baseId + "_" + modelName + "_per", 
+                  siteId: s.id, siteName: s.name, modelName, groupName: gName, apiGroupRatio: apiGroupRatio,
+                  priceType: "按次", rawInput: mPrice, rawOutput: 0
+                });
+              }
+            });
           });
           successIds.push(s.id);
         } else {
@@ -781,8 +897,8 @@ document.getElementById("modelSearchInput").oninput = e => { state.modelSearch =
 /* ====== 设置与弹窗 ====== */
 function openSettings() {
   const s = state.settings; const w = s.wallpaper || { type: "none", value: "", opacity: 0.82 }; const presetColors = ["#e8e4dd","#d4d9d6","#cfd6dc","#e3d8d2","#dcd8d0","#d9d5d0"];
-  const appVersion = "v1.1.1"; 
-  const cacheVersion = "v1.1.1"; 
+  const appVersion = "v1.2.0"; // 版本更新
+  const cacheVersion = "v1.2.0"; // 版本更新
   
   showModal(`
     <h3>设置</h3>
