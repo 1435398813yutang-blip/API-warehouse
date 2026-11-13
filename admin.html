@@ -73,6 +73,11 @@
 
     .notice-card{background:#fff;border:1.5px solid var(--border);border-radius:var(--radius);padding:12px;margin-bottom:8px;box-shadow:var(--shadow)}
     .pin-badge{background:var(--danger); color:#fff; font-size:10px; padding:2px 5px; border-radius:4px; margin-right:6px;}
+
+    /* 动态联系方式行 */
+    .contact-row { display: flex; gap: 8px; margin-bottom: 8px; }
+    .contact-row input { flex: 1; margin: 0; }
+    .contact-row button { padding: 0 12px; border: 1.5px solid var(--danger); color: var(--danger); background: transparent; border-radius: var(--radius); cursor: pointer; }
   </style>
 </head>
 <body>
@@ -104,7 +109,7 @@
 
 <script>
 let registry = { 
-  version: 1, updatedAt: "", notice: [], contact: {}, 
+  version: 1, updatedAt: "", notice: [], contact: [], 
   presetGroups: [], presetTags: [], sites: [] 
 };
 let currentGroups = [];
@@ -116,6 +121,16 @@ async function loadData() {
     const res = await fetch('./registry.json');
     if (res.ok) {
       registry = await res.json();
+      
+      // 兼容旧数据：如果 contact 是对象（旧版），转为数组（新版）
+      if (registry.contact && !Array.isArray(registry.contact)) {
+        const newContact = [];
+        if (registry.contact.email) newContact.push({ label: '邮箱', value: registry.contact.email });
+        if (registry.contact.qq) newContact.push({ label: 'QQ', value: registry.contact.qq });
+        registry.contact = newContact;
+      }
+      if (!Array.isArray(registry.contact)) registry.contact = [];
+
       currentGroups = registry.presetGroups || ["付费站","公益站","有签到","限制签到","生图站"];
       currentTags = registry.presetTags || ["试吃","无试吃","试吃不确定","需邀请码","关闭注册","生图","视频","音频","抗截断","常用"];
     }
@@ -137,7 +152,6 @@ function renderNotices() {
     wrap.innerHTML = `<div style="font-size:12px;color:#999;padding:10px 4px;">暂无公告</div>`;
     return;
   }
-  // 倒序显示
   const reversed = notices.slice().reverse();
   wrap.innerHTML = reversed.map((n, i) => {
     const trueIdx = notices.length - 1 - i;
@@ -323,11 +337,28 @@ window.saveNoticeForm = () => {
   renderNotices();
 };
 
+// ====== 动态联系方式设置 ======
 function openSettings() {
+  const contactList = registry.contact || [];
+  
+  const rowsHtml = contactList.map((c, i) => `
+    <div class="contact-row" id="contact-row-${i}">
+      <input type="text" class="c-label" value="${c.label || ''}" placeholder="名称(如微信)">
+      <input type="text" class="c-value" value="${c.value || ''}" placeholder="内容">
+      <button type="button" onclick="document.getElementById('contact-row-${i}').remove()">删除</button>
+    </div>
+  `).join("");
+
   document.getElementById("modalBox").innerHTML = `
     <h3>联系方式设置</h3>
-    <div class="field"><label>联系邮箱</label><input id="c-email" value="${registry.contact?.email||''}"></div>
-    <div class="field"><label>联系 QQ</label><input id="c-qq" value="${registry.contact?.qq||''}"></div>
+    <div class="field">
+      <label>动态字段列表（可以自定义添加，如微信、TG等）</label>
+      <div id="contactListWrap">
+        ${rowsHtml}
+      </div>
+      <button class="btn" style="width:100%;margin-top:8px; border-style:dashed;" onclick="addContactRow()">+ 新增一行</button>
+    </div>
+    
     <div class="btn-row" style="border:none;margin-top:20px;">
       <button class="btn" onclick="closeModal()">取消</button>
       <button class="btn primary" onclick="saveSettings()">保存</button>
@@ -336,13 +367,33 @@ function openSettings() {
   document.getElementById("modalMask").classList.add("show");
 }
 
+window.addContactRow = () => {
+  const wrap = document.getElementById("contactListWrap");
+  const div = document.createElement("div");
+  div.className = "contact-row";
+  const tempId = 'new_' + Date.now();
+  div.id = tempId;
+  div.innerHTML = `
+    <input type="text" class="c-label" placeholder="名称(如微信)">
+    <input type="text" class="c-value" placeholder="内容">
+    <button type="button" onclick="document.getElementById('${tempId}').remove()">删除</button>
+  `;
+  wrap.appendChild(div);
+};
+
 window.saveSettings = () => {
-  registry.contact = {
-    email: document.getElementById("c-email").value.trim(),
-    qq: document.getElementById("c-qq").value.trim()
-  };
+  const rows = document.querySelectorAll("#contactListWrap .contact-row");
+  const newContact = [];
+  rows.forEach(row => {
+    const label = row.querySelector(".c-label").value.trim();
+    const value = row.querySelector(".c-value").value.trim();
+    if (label && value) {
+      newContact.push({ label, value });
+    }
+  });
+  registry.contact = newContact;
   closeModal();
-  alert("联系方式已更新，请记得导出");
+  alert("联系方式已更新，请记得导出并替换文件");
 };
 
 document.getElementById("btnAddSite").onclick = () => openSiteForm(null);
