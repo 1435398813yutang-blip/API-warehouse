@@ -101,6 +101,11 @@
   <div id="siteList"></div>
 </main>
 
+<div style="position:fixed; left:16px; bottom:20px; display:flex; gap:8px; z-index:30;">
+  <button class="btn" style="width:auto; height:48px; border-radius:24px; padding:0 16px;" id="btnImport">导入</button>
+  <button class="btn" style="width:auto; height:48px; border-radius:24px; padding:0 16px;" id="btnReset">恢复线上</button>
+  <input type="file" id="fileImport" accept=".json" style="display:none">
+</div>
 <button class="fab" id="btnExport">导出 JSON</button>
 
 <div class="modal-mask" id="modalMask">
@@ -116,27 +121,47 @@ let currentGroups = [];
 let currentTags = [];
 let collapsedGroups = [];
 
-async function loadData() {
-  try {
-    const res = await fetch('./registry.json');
-    if (res.ok) {
-      registry = await res.json();
-      
-      // 兼容旧数据：如果 contact 是对象（旧版），转为数组（新版）
-      if (registry.contact && !Array.isArray(registry.contact)) {
-        const newContact = [];
-        if (registry.contact.email) newContact.push({ label: '邮箱', value: registry.contact.email });
-        if (registry.contact.qq) newContact.push({ label: 'QQ', value: registry.contact.qq });
-        registry.contact = newContact;
-      }
-      if (!Array.isArray(registry.contact)) registry.contact = [];
+const STORAGE_KEY = 'api_tool_registry_draft';
 
-      currentGroups = registry.presetGroups || ["付费站","公益站","有签到","限制签到","生图站"];
-      currentTags = registry.presetTags || ["试吃","无试吃","试吃不确定","需邀请码","关闭注册","生图","视频","音频","抗截断","常用"];
+// 自动保存到本地草稿
+function saveToLocal() {
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(registry));
+}
+
+async function loadData() {
+  const draft = localStorage.getItem(STORAGE_KEY);
+  
+  if (draft) {
+    try {
+      registry = JSON.parse(draft);
+      console.log('已加载本地草稿数据');
+    } catch(e) {}
+  } else {
+    // 如果没有草稿，拉取线上文件
+    try {
+      const res = await fetch('./registry.json');
+      if (res.ok) {
+        registry = await res.json();
+        saveToLocal();
+        console.log('已从线上同步数据到本地草稿');
+      }
+    } catch (e) { 
+      console.warn('读取 registry.json 失败，且无本地草稿'); 
     }
-  } catch (e) { 
-    alert('读取 registry.json 失败，请确保本地有该文件或使用了服务器环境'); 
   }
+
+  // 兼容旧数据修复
+  if (registry.contact && !Array.isArray(registry.contact)) {
+    const newContact = [];
+    if (registry.contact.email) newContact.push({ label: '邮箱', value: registry.contact.email });
+    if (registry.contact.qq) newContact.push({ label: 'QQ', value: registry.contact.qq });
+    registry.contact = newContact;
+  }
+  if (!Array.isArray(registry.contact)) registry.contact = [];
+
+  currentGroups = registry.presetGroups || ["付费站","公益站","有签到","限制签到","生图站"];
+  currentTags = registry.presetTags || ["试吃","无试吃","试吃不确定","需邀请码","关闭注册","生图","视频","音频","抗截断","常用"];
+  
   render();
 }
 
@@ -225,6 +250,7 @@ window.toggleGroup = (g) => {
 window.deleteSite = (id) => {
   if (!confirm('确定删除该站点？')) return;
   registry.sites = registry.sites.filter(s => s.id !== id);
+  saveToLocal();
   renderSites();
 };
 
@@ -237,6 +263,7 @@ window.editSite = (id) => {
 window.deleteNotice = (idx) => {
   if(!confirm('确定删除这条公告？')) return;
   registry.notice.splice(idx, 1);
+  saveToLocal();
   renderNotices();
 };
 
@@ -289,10 +316,10 @@ window.saveSiteForm = () => {
   const tags = [...document.querySelectorAll("#tagPicker .chip.active")].map(c => c.dataset.tag);
   const obj = { id, name, invite, group, tags, note: document.getElementById("f-note").value.trim() };
   
-  const idx = registry.sites.findIndex(x => x.id === id);
   if(idx >= 0) registry.sites[idx] = obj;
   else registry.sites.push(obj);
 
+  saveToLocal();
   closeModal();
   renderSites();
 };
@@ -333,6 +360,7 @@ window.saveNoticeForm = () => {
   } else {
     registry.notice.push(obj); 
   }
+  saveToLocal();
   closeModal();
   renderNotices();
 };
@@ -392,13 +420,47 @@ window.saveSettings = () => {
     }
   });
   registry.contact = newContact;
+  saveToLocal();
   closeModal();
-  alert("联系方式已更新，请记得导出并替换文件");
+  alert("联系方式已更新并自动保存至草稿，请记得导出并替换文件");
 };
 
 document.getElementById("btnAddSite").onclick = () => openSiteForm(null);
 document.getElementById("btnAddNotice").onclick = () => openNoticeForm(null);
 document.getElementById("btnSettings").onclick = openSettings;
+
+document.getElementById('btnImport').onclick = () => {
+  document.getElementById('fileImport').click();
+};
+
+document.getElementById('fileImport').onchange = (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (event) => {
+    try {
+      const parsed = JSON.parse(event.target.result);
+      if (parsed && parsed.sites && parsed.notice) {
+        registry = parsed;
+        saveToLocal();
+        render();
+        alert('导入成功！数据已覆盖并保存至本地草稿。');
+      } else {
+        alert('文件格式错误：不是本工具的备份文件。');
+      }
+    } catch (err) {
+      alert('解析文件失败。');
+    }
+    e.target.value = '';
+  };
+  reader.readAsText(file);
+};
+
+document.getElementById('btnReset').onclick = async () => {
+  if(!confirm('这会清空你当前未导出的本地草稿，并重新从线上（registry.json）拉取数据，确定吗？')) return;
+  localStorage.removeItem(STORAGE_KEY);
+  await loadData();
+};
 
 document.getElementById("btnExport").onclick = () => {
   registry.updatedAt = new Date().toISOString().split('T')[0];
