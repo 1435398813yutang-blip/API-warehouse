@@ -42,6 +42,9 @@ const state = {
   customGroupRatios: {} 
 };
 
+// 核心修复：设置页暂存全局变量，防丢失
+let currentSettingsTemp = null;
+
 function uid() { return "s_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
 function todayStr() { const d = new Date(); const p = n => String(n).padStart(2, "0"); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`; }
 function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
@@ -402,12 +405,13 @@ function openSiteForm(id) {
     <div class="field"><label>站点架构类型（用于拉取余额）</label><select id="f-siteType"><option value="newapi" ${s.siteType === "newapi" ? "selected" : ""}>New API 体系</option><option value="sub2api" ${s.siteType === "sub2api" ? "selected" : ""}>Sub2API 体系</option><option value="deepseek" ${s.siteType === "deepseek" ? "selected" : ""}>DeepSeek 官方</option><option value="siliconflow" ${s.siteType === "siliconflow" ? "selected" : ""}>硅基流动</option><option value="manual" ${s.siteType === "manual" ? "selected" : ""}>仅手动记录</option></select></div>
     <div class="field"><label>API 端点</label><input id="f-api" value="${esc(s.apiEndpoint)}" placeholder="如 https://api.xxx.com"></div>
     
+    <!-- 访问令牌小按钮 -->
     <div class="field">
       <label>访问令牌</label>
-      <div style="position:relative; display:flex; gap:4px;">
-        <input id="f-token" type="password" value="${esc(s.accessToken)}" placeholder="系统访问令牌" style="flex:1;">
-        <button class="btn" style="width:36px; padding:0; font-size:16px;" onclick="const i=document.getElementById('f-token'); i.type = i.type==='password' ? 'text' : 'password'; this.textContent = i.type==='password' ? '👁️' : '🔒';">👁️</button>
-        <button class="btn" style="width:36px; padding:0; font-size:16px;" onclick="copyText(document.getElementById('f-token').value)">📋</button>
+      <div class="input-with-action">
+        <input id="f-token" type="password" value="${esc(s.accessToken)}" placeholder="系统访问令牌">
+        <button class="action-btn" onclick="const i=document.getElementById('f-token'); i.type = i.type==='password' ? 'text' : 'password'; this.textContent = i.type==='password' ? '👁️' : '🔒';">👁️</button>
+        <button class="action-btn" onclick="copyText(document.getElementById('f-token').value)">📋</button>
       </div>
     </div>
     
@@ -998,7 +1002,11 @@ document.getElementById("btnFetchPrices").onclick = () => {
 document.getElementById("modelSearchInput").oninput = e => { state.modelSearch = e.target.value; renderModelList(); };
 
 function openSettings() {
-  const temp = JSON.parse(JSON.stringify(state.settings)); 
+  if (!currentSettingsTemp) {
+    currentSettingsTemp = JSON.parse(JSON.stringify(state.settings)); 
+  }
+  const temp = currentSettingsTemp;
+  
   const w = temp.wallpaper || { type: "none", value: "", opacity: 0.82, blur: 0 }; 
   const presetColors = ["#e8e4dd","#d4d9d6","#cfd6dc","#e3d8d2","#dcd8d0","#d9d5d0"];
   const textColors = [
@@ -1033,10 +1041,11 @@ function openSettings() {
     <div class="settings-section">
       <h4>网络代理（解决跨域拉取余额）</h4>
       <div class="field">
-        <div style="display:flex; gap:4px;">
-          <input id="s-proxyUrl" type="password" value="${esc(temp.proxyUrl || '')}" placeholder="填入你的 Cloudflare Worker 地址" style="flex:1;">
-          <button class="btn" style="width:36px; padding:0; font-size:16px;" onclick="const i=document.getElementById('s-proxyUrl'); i.type = i.type==='password' ? 'text' : 'password'; this.textContent = i.type==='password' ? '👁️' : '🔒';">👁️</button>
-          <button class="btn" style="width:36px; padding:0; font-size:16px;" onclick="copyText(document.getElementById('s-proxyUrl').value)">📋</button>
+        <!-- 代理小按钮 -->
+        <div class="input-with-action">
+          <input id="s-proxyUrl" type="password" value="${esc(temp.proxyUrl || '')}" placeholder="填入你的 Cloudflare Worker 地址">
+          <button class="action-btn" onclick="const i=document.getElementById('s-proxyUrl'); i.type = i.type==='password' ? 'text' : 'password'; this.textContent = i.type==='password' ? '👁️' : '🔒';">👁️</button>
+          <button class="action-btn" onclick="copyText(document.getElementById('s-proxyUrl').value)">📋</button>
         </div>
         <div class="hint">不填将无法自动拉取。<a href="javascript:void(0)" id="btnShowTutorial" style="color:var(--accent)">点此查看免费配置教程</a></div>
       </div>
@@ -1263,6 +1272,7 @@ function openSettings() {
   };
 
   document.getElementById("s-close").onclick = () => {
+    currentSettingsTemp = null; // 清空暂存
     applyTheme(); 
     applyWallpaper();
     closeModal();
@@ -1271,6 +1281,7 @@ function openSettings() {
   document.getElementById("s-save").onclick = () => {
     state.settings = temp;
     store.saveSettings(state.settings);
+    currentSettingsTemp = null; // 保存后清空
     applyTheme(); 
     applyWallpaper();
     renderGroupFilter(); 
@@ -1308,7 +1319,9 @@ function openManageSettings(type, tempSettings) {
   `);
   
   window._tempManageSettings = tempSettings;
-  document.getElementById("btnManageClose").onclick = () => openSettings();
+  document.getElementById("btnManageClose").onclick = () => {
+    openSettings(); // 这里不会重置 currentSettingsTemp
+  };
 }
 
 window.addManageItemSettings = (type) => {
@@ -1329,15 +1342,68 @@ window.deleteManageItemSettings = (type, index) => {
   const itemName = list[index];
   
   if (isGroup) {
-    const usedCount = state.sites.filter(s => s.group === itemName).length;
-    if (usedCount > 0) {
-      return alert(`当前有 ${usedCount} 个站点正在使用该分组，请先在首页将这些站点转移到其他分组，再回来删除。`);
+    const usedSites = state.sites.filter(s => s.group === itemName);
+    if (usedSites.length > 0) {
+      const otherGroups = temp.groups.filter(g => g !== itemName);
+      const optionsHtml = otherGroups.map(g => `<option value="${esc(g)}">${esc(g)}</option>`).join("");
+      
+      showModal(`
+        <h3>转移站点并删除分组</h3>
+        <div style="font-size:13px; margin-bottom:12px; color:var(--text-2); line-height:1.6;">
+          该分组下有 <b>${usedSites.length}</b> 个站点正在使用。<br>
+          请选择要将这些站点转移到哪个分组：
+        </div>
+        <div class="field" style="margin-top:12px;">
+          <input type="text" id="transfer-target-group" list="transferGroupList" placeholder="选择或输入新的分组名称" value="${otherGroups[0] || ''}" style="width:100%; padding:10px; border:1.5px solid var(--border); border-radius:6px;">
+          <datalist id="transferGroupList">${otherGroups.map(g => `<option value="${esc(g)}">`).join("")}</datalist>
+          <div class="hint" style="margin-top:6px; font-size:12px; color:var(--text-2);">输入不存在的名称将自动新建该分组。</div>
+        </div>
+        <div class="btn-row" style="margin-top:20px;">
+          <button class="btn" id="btnTransferCancel">取消</button>
+          <button class="btn primary" id="btnTransferConfirm">确认转移并删除</button>
+        </div>
+      `);
+      
+      document.getElementById("btnTransferCancel").onclick = () => openManageSettings(type, temp);
+      document.getElementById("btnTransferConfirm").onclick = () => {
+        const targetGroup = document.getElementById("transfer-target-group").value.trim();
+        if (!targetGroup) { toast("请选择或输入目标分组"); return; }
+        
+        usedSites.forEach(s => { s.group = targetGroup; });
+        store.saveSites(state.sites); 
+        
+        if (!temp.groups.includes(targetGroup)) {
+          temp.groups.push(targetGroup);
+        }
+        
+        const realIndex = temp.groups.indexOf(itemName);
+        if (realIndex > -1) temp.groups.splice(realIndex, 1);
+        
+        renderList();
+        openManageSettings(type, temp);
+        toast("已成功转移站点并删除分组");
+      };
+      return;
     }
   }
   
-  if (!confirm(`确定删除 ${isGroup ? '分组' : '标签'}「${itemName}」？`)) return;
+  const usedCount = state.sites.filter(s => s.tags && s.tags.includes(itemName)).length;
+  let confirmMsg = `确定删除 ${isGroup ? '分组' : '标签'}「${itemName}」？`;
+  if (!isGroup && usedCount > 0) {
+    confirmMsg = `该标签正在被 ${usedCount} 个站点使用。\n删除后，该标签将从这些站点中移除。\n确定删除吗？`;
+  }
+  if (!confirm(confirmMsg)) return;
   
   list.splice(index, 1);
+  
+  if (!isGroup) {
+    state.sites.forEach(s => {
+      if (s.tags) s.tags = s.tags.filter(t => t !== itemName);
+    });
+    store.saveSites(state.sites);
+    renderList(); 
+  }
+  
   openManageSettings(type, temp);
 };
 
@@ -1416,7 +1482,6 @@ function toast(msg) { const el = document.getElementById("toast"); el.textConten
 function bindEvents() {
   document.querySelectorAll(".nav-item").forEach(n => n.onclick = () => switchTab(n.dataset.tab));
   
-  // 修复后的公告渲染（恢复平铺+仅改排序）
   document.getElementById("btnNotice").onclick = () => {
     const readList = store.getReadNotices();
     const contactHtml = getContactHtml();
@@ -1507,12 +1572,16 @@ function bindEvents() {
   const panel = document.getElementById("registryPanel"); const entryBtn = document.getElementById("btnRegistry");
   entryBtn.onclick = () => { panel.hidden = !panel.hidden; if (panel.hidden) entryBtn.classList.remove("open"); else { entryBtn.classList.add("open"); renderRegistry(); } };
   document.getElementById("regClose").onclick = () => { panel.hidden = true; entryBtn.classList.remove("open"); renderRegistry(); };
-  document.getElementById("modalMask").onclick = e => { if (e.target.id === "modalMask") { 
-    if (document.getElementById("s-save")) {
-      applyTheme(); applyWallpaper();
+  
+  document.getElementById("modalMask").onclick = e => { 
+    if (e.target.id === "modalMask") { 
+      if (document.getElementById("s-save")) {
+        currentSettingsTemp = null; // 点遮罩关闭设置页也要清空暂存
+        applyTheme(); applyWallpaper();
+      }
+      closeModal(); 
     }
-    closeModal(); 
-  }};
+  };
 }
 
 init();
