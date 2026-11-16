@@ -9,9 +9,9 @@ let REGISTRY = { notice: [], contact: [], presetGroups: [], presetTags: [], site
 function defaultSettings() {
   return {
     theme: "morandi", 
-    wallpaper: { type: "none", value: "", opacity: 0.82, blur: 0 }, // 新增 blur
-    textMode: "auto", // 新增：auto / dark / light / custom
-    customTextColor: "#2d2b28", // 新增：自定义颜色
+    wallpaper: { type: "none", value: "", opacity: 0.82, blur: 0 },
+    textMode: "auto", 
+    customTextColor: "#2d2b28", 
     appName: "API小仓库", proxyUrl: "", 
     groups: ["付费站", "公益站", "有签到", "限制签到", "生图站"],
     tags: ["试吃", "无试吃", "试吃不确定", "需邀请码", "关闭注册", "生图", "视频", "音频", "抗截断", "常用"],
@@ -64,9 +64,7 @@ function linkify(text) {
 window.copyText = (text) => {
   if (navigator.clipboard?.writeText) {
     navigator.clipboard.writeText(text).then(() => toast("已复制")).catch(() => fallbackCopy(text));
-  } else {
-    fallbackCopy(text);
-  }
+  } else { fallbackCopy(text); }
 };
 function fallbackCopy(text) { 
   const ta = document.createElement("textarea"); ta.value = text; document.body.appendChild(ta); ta.select(); 
@@ -119,29 +117,23 @@ function applyWallpaper() {
   const w = state.settings.wallpaper || { type: "none", value: "", opacity: 0.82, blur: 0 };
   const el = document.getElementById("wallpaper");
   
-  // 1. 处理背景模糊
   const blurVal = w.blur || 0;
   el.style.filter = blurVal > 0 ? `blur(${blurVal}px)` : "none";
-  // 根据模糊度调整缩放防白边
   const scale = 1 + (blurVal / 100); 
   el.style.transform = blurVal > 0 ? `scale(${scale})` : "scale(1)";
 
-  // 2. 处理背景颜色/图片
   let css = "transparent";
   if (w.type === "color" && w.value) css = w.value;
   else if (w.type === "image" && w.value) css = `url("${w.value}") center/cover no-repeat`;
   el.style.background = css;
   
-  // 3. 卡片透明度
   document.documentElement.style.setProperty("--card-opacity", String(w.opacity || 0.82));
   
-  // 4. 处理文字颜色模式
   const textMode = state.settings.textMode || "auto";
   let finalMode = textMode;
 
   if (textMode === "auto") {
     if (w.type === "color" && w.value && /^#[0-9a-fA-F]{6}$/.test(w.value)) {
-      // 自动计算纯色亮度
       const hex = w.value.replace('#', '');
       const r = parseInt(hex.substr(0, 2), 16);
       const g = parseInt(hex.substr(2, 2), 16);
@@ -149,7 +141,6 @@ function applyWallpaper() {
       const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000;
       finalMode = yiq < 128 ? "light" : "dark";
     } else {
-      // 图片背景或无背景时，默认使用深色字（浅色卡片）
       finalMode = "dark";
     }
   }
@@ -159,7 +150,6 @@ function applyWallpaper() {
     document.documentElement.style.setProperty("--custom-text-color", state.settings.customTextColor || "#2d2b28");
   }
 
-  // 5. 应用名称
   const name = state.settings.appName || "API小仓库";
   document.getElementById("appName").textContent = name; document.title = name;
 }
@@ -289,7 +279,6 @@ function toggleCheckin(id) { const s = state.sites.find(x => x.id === id); if (!
 function copyInvite(id) { const s = state.sites.find(x => x.id === id); if (!s) return; const text = s.invite || s.mainUrl || ""; copyText(text); }
 function deleteSite(id) { const s = state.sites.find(x => x.id === id); if (!s) return; if (!confirm(`确定删除「${s.name}」？`)) return; state.sites = state.sites.filter(x => x.id !== id); state.selectedMyIds.delete(id); store.saveSites(state.sites); renderList(); toast("已删除"); }
 
-/* ====== 多选与批量操作逻辑 ====== */
 function toggleMySelect(id, isChecked) {
   if (isChecked) state.selectedMyIds.add(id); else state.selectedMyIds.delete(id);
   renderList();
@@ -364,7 +353,6 @@ document.getElementById("btnOpenBatch").onclick = () => {
   };
 };
 
-/* ====== 核心：拉取逻辑 ====== */
 async function fetchWithProxy(url, options = {}) {
   const proxy = state.settings.proxyUrl;
   if (proxy) { return fetch(`${proxy}?target=${encodeURIComponent(url)}`, options); }
@@ -454,7 +442,6 @@ function openSiteForm(id) {
   };
 }
 
-/* ====== 收录站点多选与拉取 ====== */
 function regCardHTML(s) { 
   const added = state.sites.some(x => x.sourceId === s.id); 
   const tags = (s.tags || []).map(t => `<span class="tag">${esc(t)}</span>`).join(""); 
@@ -620,7 +607,6 @@ function addFromRegistry(rid) {
   toast("已添加");
 }
 
-/* ====== 模型页与拉取逻辑 ====== */
 function getProvider(modelName) {
   const n = (modelName || "").toLowerCase();
   if (n.includes("gpt") || n.includes("dall-e") || n.includes("whisper")) return "OpenAI";
@@ -1011,7 +997,6 @@ document.getElementById("btnFetchPrices").onclick = () => {
 
 document.getElementById("modelSearchInput").oninput = e => { state.modelSearch = e.target.value; renderModelList(); };
 
-/* ====== 设置与弹窗 ====== */
 function openSettings() {
   const temp = JSON.parse(JSON.stringify(state.settings)); 
   const w = temp.wallpaper || { type: "none", value: "", opacity: 0.82, blur: 0 }; 
@@ -1032,7 +1017,6 @@ function openSettings() {
     <h3>设置</h3>
     <div class="settings-section"><h4>主题</h4><div class="theme-row"><button class="theme-btn ${temp.theme !== "mono" ? "active" : ""}" data-theme-btn="morandi">莫兰迪</button><button class="theme-btn ${temp.theme === "mono" ? "active" : ""}" data-theme-btn="mono">极简黑白</button></div></div>
     
-    <!-- 新增文字颜色设置 -->
     <div class="settings-section">
       <h4>文字颜色</h4>
       <div class="text-color-row" id="textColorPicker">
@@ -1072,7 +1056,6 @@ function openSettings() {
       <div class="field" id="colorField" style="display:${w.type === "color" ? "block" : "none"}"><label>选颜色（点预设或自选）</label><div class="color-row"><input type="color" id="s-wallColor" value="${/^#[0-9a-fA-F]{6}$/.test(w.value || "") ? w.value : "#e8e4dd"}"><div class="preset-colors" id="presetColors">${presetColors.map(c => `<div class="preset-color" data-color="${c}" style="background:${c}" title="${c}"></div>`).join("")}</div></div></div>
       <div class="field" id="valueField" style="display:${w.type === "image" ? "block" : "none"}"><label>图片链接（或者是点下方按钮上传）</label><input id="s-wallValue" value="${esc(w.value && !w.value.startsWith('data:') ? w.value : '')}" placeholder="https://..."><div style="margin-top:8px"><input type="file" id="s-wallFile" accept="image/*" style="display:none"><button class="btn" style="width:100%;padding:8px;font-size:13px" onclick="document.getElementById('s-wallFile').click()">从相册选择图片上传</button></div></div>
       
-      <!-- 新增背景模糊度 -->
       <div class="field"><label>背景模糊度：<span id="blurVal">${w.blur || 0}px</span></label><input type="range" id="s-blur" min="0" max="20" value="${w.blur || 0}" style="width:100%"></div>
       
       <div class="wall-preview" id="wallPreview"></div>
@@ -1113,14 +1096,12 @@ function openSettings() {
     }; 
   });
 
-  // 文字颜色选择逻辑
   document.querySelectorAll(".text-color-opt").forEach(el => {
     el.onclick = () => {
       document.querySelectorAll(".text-color-opt").forEach(opt => opt.classList.remove("active"));
       el.classList.add("active");
       temp.textMode = el.dataset.textmode;
       document.getElementById("customTextColorField").style.display = temp.textMode === 'custom' ? 'block' : 'none';
-      // 实时预览文字颜色
       applyTempTextColor(temp);
     };
   });
@@ -1165,7 +1146,6 @@ function openSettings() {
     } 
     temp.wallpaper = { type, value, opacity, blur }; 
     
-    // 实时预览壁纸和模糊
     const el = document.getElementById("wallpaper");
     let css = "transparent";
     if (type === "color" && value) css = value;
@@ -1175,7 +1155,6 @@ function openSettings() {
     el.style.transform = blur > 0 ? `scale(${1 + blur/100})` : "scale(1)";
     document.documentElement.style.setProperty("--card-opacity", String(opacity));
     
-    // 如果当前是自动模式，背景变化时顺便重新计算文字颜色
     if (temp.textMode === 'auto') applyTempTextColor(temp);
 
     const pv = document.getElementById("wallPreview"); 
@@ -1284,7 +1263,6 @@ function openSettings() {
   };
 
   document.getElementById("s-close").onclick = () => {
-    // 关闭时恢复原样
     applyTheme(); 
     applyWallpaper();
     closeModal();
@@ -1438,6 +1416,7 @@ function toast(msg) { const el = document.getElementById("toast"); el.textConten
 function bindEvents() {
   document.querySelectorAll(".nav-item").forEach(n => n.onclick = () => switchTab(n.dataset.tab));
   
+  // 修复后的公告渲染（恢复平铺+仅改排序）
   document.getElementById("btnNotice").onclick = () => {
     const readList = store.getReadNotices();
     const contactHtml = getContactHtml();
@@ -1458,9 +1437,8 @@ function bindEvents() {
       `;
     }
 
-    let rawNotices = (REGISTRY.notice || []).map((n, i) => ({ ...n, originalIndex: i }));
-    
-    rawNotices.sort((a, b) => {
+    let notices = (REGISTRY.notice || []).map((n, i) => ({ ...n, originalIndex: i }));
+    notices.sort((a, b) => {
       const pinA = a.isPinned ? 1 : 0;
       const pinB = b.isPinned ? 1 : 0;
       if (pinA !== pinB) return pinB - pinA;
@@ -1469,52 +1447,27 @@ function bindEvents() {
       return b.originalIndex - a.originalIndex;
     });
 
-    const pinnedNotices = rawNotices.filter(n => n.isPinned);
-    const historyNotices = rawNotices.filter(n => !n.isPinned);
-    
     const newReadList = [...readList];
-
-    const renderNoticeItem = (n) => {
-      const pinHtml = n.isPinned ? '<span style="background:var(--danger);color:#fff;font-size:10px;padding:2px 4px;border-radius:4px;margin-right:4px;">置顶</span>' : '';
+    if (notices.length === 0) html += `<div class="empty" style="padding:20px;">暂无公告</div>`;
+    
+    notices.forEach(n => { 
+      const pinHtml = n.isPinned ? '<span style="background:var(--danger);color:#fff;font-size:10px;padding:2px 4px;border-radius:4px;">置顶</span>' : '';
       const noticeId = n.date + "_" + n.title;
       const isRead = readList.includes(noticeId);
-      const unreadDot = isRead ? '' : '<span class="unread-dot"></span>';
       if (!isRead) newReadList.push(noticeId);
-      
       const expandedClass = isRead ? "" : "expanded";
       
-      return `<div class="notice-card ${expandedClass}" data-id="${esc(noticeId)}">
+      html += `<div class="notice-card ${expandedClass}" data-id="${esc(noticeId)}">
         <div class="notice-header">
-          <div class="left-part">${unreadDot}${pinHtml}<span class="notice-title">${esc(n.title)}</span></div>
+          <div class="left-part">${pinHtml}<span class="notice-title">${esc(n.title)}</span></div>
           <div style="display:flex; align-items:center; gap:8px;">
             <span class="notice-date">${esc(n.date)}</span><span class="notice-arrow">▼</span>
           </div>
         </div>
         <div class="notice-content">${linkify(n.content)}</div>
       </div>`; 
-    };
-
-    if (pinnedNotices.length > 0) {
-      html += `<div style="font-size:12px; color:var(--text-2); margin-bottom:8px; font-weight:600;">最新置顶公告</div>`;
-      html += pinnedNotices.map(renderNoticeItem).join("");
-    }
-
-    if (historyNotices.length > 0) {
-      html += `
-        <div class="history-toggle" id="historyToggle">
-          <span>历史公告 (${historyNotices.length})</span>
-          <span class="arrow">▼</span>
-        </div>
-        <div class="history-list-wrap" id="historyList" style="display:none;">
-          ${historyNotices.map(renderNoticeItem).join("")}
-        </div>
-      `;
-    }
-
-    if (rawNotices.length === 0) {
-      html += `<div class="empty" style="padding:20px;">暂无公告</div>`;
-    }
-
+    });
+    
     html += `<div class="btn-row"><button class="btn" id="btnCloseNotice">关闭</button></div>`;
     showModal(html); 
     
@@ -1528,20 +1481,6 @@ function bindEvents() {
         } else {
           body.style.display = "none";
           arrow.style.transform = "rotate(-90deg)";
-        }
-      };
-    }
-
-    if (document.getElementById("historyToggle")) {
-      document.getElementById("historyToggle").onclick = () => {
-        const list = document.getElementById("historyList");
-        const toggle = document.getElementById("historyToggle");
-        if (list.style.display === "none") {
-          list.style.display = "block";
-          toggle.classList.remove("collapsed");
-        } else {
-          list.style.display = "none";
-          toggle.classList.add("collapsed");
         }
       };
     }
