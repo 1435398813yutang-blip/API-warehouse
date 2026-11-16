@@ -78,6 +78,12 @@
     .contact-row { display: flex; gap: 8px; margin-bottom: 8px; }
     .contact-row input { flex: 1; margin: 0; }
     .contact-row button { padding: 0 12px; border: 1.5px solid var(--danger); color: var(--danger); background: transparent; border-radius: var(--radius); cursor: pointer; }
+    
+    /* 管理列表样式 */
+    .manage-list { max-height: 40vh; overflow-y: auto; border: 1.5px solid var(--border); border-radius: var(--radius); padding: 8px; background: #faf9f7; }
+    .manage-item { display: flex; justify-content: space-between; align-items: center; padding: 8px; border-bottom: 1px dashed #ddd; font-size: 14px; }
+    .manage-item:last-child { border-bottom: none; }
+    .manage-item button { padding: 2px 8px; font-size: 12px; border: 1px solid var(--danger); color: var(--danger); background: transparent; border-radius: 4px; cursor: pointer; }
   </style>
 </head>
 <body>
@@ -85,7 +91,9 @@
 <header class="topbar">
   <h1>管理后台</h1>
   <div>
-    <button class="text-btn" id="btnSettings">联系方式</button>
+    <button class="text-btn" id="btnManageGroups">分组管理</button>
+    <button class="text-btn" id="btnManageTags">标签管理</button>
+    <button class="text-btn" id="btnSettings" style="margin-left:4px;">联系方式</button>
     <button class="text-btn" style="color:var(--accent)" id="btnAddSite">+ 新增站点</button>
   </div>
 </header>
@@ -305,7 +313,6 @@ function openSiteForm(site) {
   document.getElementById("modalMask").classList.add("show");
 }
 
-// 🚨 修复：加入 try...catch，修复 idx 未定义导致崩溃的问题
 window.saveSiteForm = () => {
   try {
     const id = document.getElementById("f-id").value;
@@ -322,7 +329,6 @@ window.saveSiteForm = () => {
     const tags = [...document.querySelectorAll("#tagPicker .chip.active")].map(c => c.dataset.tag);
     const obj = { id, name, invite, group, tags, note: document.getElementById("f-note").value.trim() };
     
-    // 修复未定义变量
     const idx = registry.sites.findIndex(x => x.id === id);
     if(idx >= 0) {
       registry.sites[idx] = obj;
@@ -382,6 +388,78 @@ window.saveNoticeForm = () => {
   } catch (err) {
     alert("保存公告失败: " + err.message);
   }
+};
+
+// ====== 分组/标签管理 ======
+function openManage(type) {
+  const isGroup = type === 'group';
+  const list = isGroup ? currentGroups : currentTags;
+  const title = isGroup ? '管理分组' : '管理标签';
+  
+  const listHtml = list.map((item, i) => `
+    <div class="manage-item">
+      <span>${item}</span>
+      <button onclick="deleteManageItem('${type}', ${i})">删除</button>
+    </div>
+  `).join("");
+
+  document.getElementById("modalBox").innerHTML = `
+    <h3>${title}</h3>
+    <div class="field">
+      <div style="display:flex; gap:8px;">
+        <input type="text" id="m-new-name" placeholder="输入新名称..." style="flex:1;">
+        <button class="btn primary" style="width:80px;" onclick="addManageItem('${type}')">+ 添加</button>
+      </div>
+    </div>
+    <div class="manage-list">${listHtml || '<div style="text-align:center;color:#999;padding:10px;">暂无数据</div>'}</div>
+    <div class="btn-row" style="border:none;margin-top:20px;">
+      <button class="btn" onclick="closeModal()">关闭</button>
+    </div>
+  `;
+  document.getElementById("modalMask").classList.add("show");
+}
+
+window.addManageItem = (type) => {
+  const val = document.getElementById("m-new-name").value.trim();
+  if (!val) return;
+  const list = type === 'group' ? currentGroups : currentTags;
+  if (list.includes(val)) return alert("该项已存在！");
+  
+  list.push(val);
+  if (type === 'group') registry.presetGroups = currentGroups;
+  else registry.presetTags = currentTags;
+  
+  saveToLocal();
+  openManage(type); // 重新渲染
+};
+
+window.deleteManageItem = (type, index) => {
+  const isGroup = type === 'group';
+  const list = isGroup ? currentGroups : currentTags;
+  const itemName = list[index];
+  
+  if (isGroup) {
+    const usedCount = registry.sites.filter(s => s.group === itemName).length;
+    if (usedCount > 0) {
+      return alert(`无法删除：当前有 ${usedCount} 个站点正在使用该分组，请先转移这些站点的分组。`);
+    }
+  }
+  
+  if (!confirm(`确定删除 ${isGroup ? '分组' : '标签'}「${itemName}」？`)) return;
+  
+  list.splice(index, 1);
+  if (isGroup) registry.presetGroups = currentGroups;
+  else registry.presetTags = currentTags;
+  
+  if (!isGroup) {
+    // 如果是标签，顺便从站点数据中剔除
+    registry.sites.forEach(s => {
+      if (s.tags) s.tags = s.tags.filter(t => t !== itemName);
+    });
+  }
+  
+  saveToLocal();
+  openManage(type);
 };
 
 // ====== 动态联系方式设置 ======
@@ -447,6 +525,8 @@ window.saveSettings = () => {
 document.getElementById("btnAddSite").onclick = () => openSiteForm(null);
 document.getElementById("btnAddNotice").onclick = () => openNoticeForm(null);
 document.getElementById("btnSettings").onclick = openSettings;
+document.getElementById("btnManageGroups").onclick = () => openManage('group');
+document.getElementById("btnManageTags").onclick = () => openManage('tag');
 
 document.getElementById('btnImport').onclick = () => {
   document.getElementById('fileImport').click();
