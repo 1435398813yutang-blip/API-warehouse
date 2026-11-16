@@ -312,3 +312,37 @@ input[type="range"]::-webkit-slider-thumb {
   padding: 2px 8px; font-size: 12px; border: 1px solid var(--danger);
   color: var(--danger); background: transparent; border-radius: 4px; cursor: pointer;
 }
+/* =========================================
+   v1.2.2 补丁：小按钮与输入框布局
+   ========================================= */
+.input-with-action {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+.input-with-action input {
+  padding-right: 60px !important; /* 给右侧按钮留出空间 */
+}
+.action-btn {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 28px;
+  height: 28px;
+  border: none;
+  background: transparent;
+  color: var(--text-2);
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  padding: 0;
+  border-radius: 4px;
+}
+.action-btn:active {
+  background: rgba(0,0,0,0.05);
+}
+.action-btn:nth-last-child(2) { right: 30px; } /* 倒数第二个（眼睛） */
+.action-btn:last-child { right: 2px; } /* 最后一个（复制） */
