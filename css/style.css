@@ -298,23 +298,7 @@ input[type="range"]::-webkit-slider-thumb {
   background: var(--accent); cursor: pointer; box-shadow: 0 2px 6px rgba(0,0,0,0.2);
 }
 
-/* 5. 历史公告大折叠与未读红点 */
-.history-toggle {
-  display: flex; justify-content: space-between; align-items: center;
-  padding: 12px; background: #ffffff !important; color: #2d2b28 !important;
-  border: 1.5px solid var(--border); border-radius: var(--radius);
-  cursor: pointer; margin-top: 16px; margin-bottom: 8px;
-  font-size: 13px; font-weight: 600; user-select: none;
-}
-.history-toggle .arrow { font-size: 10px; transition: transform 0.2s; }
-.history-toggle.collapsed .arrow { transform: rotate(-90deg); }
-.history-list-wrap { max-height: 35vh; overflow-y: auto; padding-right: 4px; }
-.unread-dot {
-  display: inline-block; width: 6px; height: 6px; background: #e74c3c;
-  border-radius: 50%; margin-right: 4px; vertical-align: middle;
-}
-
-/* 6. 管理列表 (分组/标签) */
+/* 5. 管理列表 (分组/标签) */
 .manage-list {
   max-height: 40vh; overflow-y: auto; border: 1.5px solid var(--border);
   border-radius: var(--radius); padding: 8px; background: #faf9f7 !important;
