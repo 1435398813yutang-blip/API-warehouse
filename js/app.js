@@ -8,7 +8,10 @@ let REGISTRY = { notice: [], contact: [], presetGroups: [], presetTags: [], site
 
 function defaultSettings() {
   return {
-    theme: "morandi", wallpaper: { type: "none", value: "", opacity: 0.82 },
+    theme: "morandi", 
+    wallpaper: { type: "none", value: "", opacity: 0.82, blur: 0 }, // 新增 blur
+    textMode: "auto", // 新增：auto / dark / light / custom
+    customTextColor: "#2d2b28", // 新增：自定义颜色
     appName: "API小仓库", proxyUrl: "", 
     groups: ["付费站", "公益站", "有签到", "限制签到", "生图站"],
     tags: ["试吃", "无试吃", "试吃不确定", "需邀请码", "关闭注册", "生图", "视频", "音频", "抗截断", "常用"],
@@ -108,15 +111,55 @@ function updateNoticeBadge() {
   if (badge) { if (unreadCount > 0) { badge.textContent = unreadCount; badge.style.display = "inline-block"; } else { badge.style.display = "none"; } }
 }
 
-function applyTheme() { document.documentElement.setAttribute("data-theme", state.settings.theme === "mono" ? "mono" : "morandi"); }
+function applyTheme() { 
+  document.documentElement.setAttribute("data-theme", state.settings.theme === "mono" ? "mono" : "morandi"); 
+}
+
 function applyWallpaper() {
-  const w = state.settings.wallpaper || { type: "none", value: "", opacity: 0.82 };
+  const w = state.settings.wallpaper || { type: "none", value: "", opacity: 0.82, blur: 0 };
   const el = document.getElementById("wallpaper");
+  
+  // 1. 处理背景模糊
+  const blurVal = w.blur || 0;
+  el.style.filter = blurVal > 0 ? `blur(${blurVal}px)` : "none";
+  // 根据模糊度调整缩放防白边
+  const scale = 1 + (blurVal / 100); 
+  el.style.transform = blurVal > 0 ? `scale(${scale})` : "scale(1)";
+
+  // 2. 处理背景颜色/图片
   let css = "transparent";
   if (w.type === "color" && w.value) css = w.value;
   else if (w.type === "image" && w.value) css = `url("${w.value}") center/cover no-repeat`;
   el.style.background = css;
+  
+  // 3. 卡片透明度
   document.documentElement.style.setProperty("--card-opacity", String(w.opacity || 0.82));
+  
+  // 4. 处理文字颜色模式
+  const textMode = state.settings.textMode || "auto";
+  let finalMode = textMode;
+
+  if (textMode === "auto") {
+    if (w.type === "color" && w.value && /^#[0-9a-fA-F]{6}$/.test(w.value)) {
+      // 自动计算纯色亮度
+      const hex = w.value.replace('#', '');
+      const r = parseInt(hex.substr(0, 2), 16);
+      const g = parseInt(hex.substr(2, 2), 16);
+      const b = parseInt(hex.substr(4, 2), 16);
+      const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000;
+      finalMode = yiq < 128 ? "light" : "dark";
+    } else {
+      // 图片背景或无背景时，默认使用深色字（浅色卡片）
+      finalMode = "dark";
+    }
+  }
+  
+  document.documentElement.setAttribute("data-text-mode", finalMode);
+  if (finalMode === "custom") {
+    document.documentElement.style.setProperty("--custom-text-color", state.settings.customTextColor || "#2d2b28");
+  }
+
+  // 5. 应用名称
   const name = state.settings.appName || "API小仓库";
   document.getElementById("appName").textContent = name; document.title = name;
 }
@@ -371,7 +414,6 @@ function openSiteForm(id) {
     <div class="field"><label>站点架构类型（用于拉取余额）</label><select id="f-siteType"><option value="newapi" ${s.siteType === "newapi" ? "selected" : ""}>New API 体系</option><option value="sub2api" ${s.siteType === "sub2api" ? "selected" : ""}>Sub2API 体系</option><option value="deepseek" ${s.siteType === "deepseek" ? "selected" : ""}>DeepSeek 官方</option><option value="siliconflow" ${s.siteType === "siliconflow" ? "selected" : ""}>硅基流动</option><option value="manual" ${s.siteType === "manual" ? "selected" : ""}>仅手动记录</option></select></div>
     <div class="field"><label>API 端点</label><input id="f-api" value="${esc(s.apiEndpoint)}" placeholder="如 https://api.xxx.com"></div>
     
-    <!-- 访问令牌增加显隐和复制 -->
     <div class="field">
       <label>访问令牌</label>
       <div style="position:relative; display:flex; gap:4px;">
@@ -496,7 +538,6 @@ document.getElementById("btnBatchAddReg").onclick = () => {
   toast(`成功添加 ${count} 个站点到我的站点`);
 };
 
-// 🚨 核心：收录站点添加时的防呆与自动新建逻辑
 function addFromRegistry(rid) {
   const r = REGISTRY.sites.find(s => s.id === rid); if (!r) return;
   if (state.sites.some(x => x.sourceId === r.id)) { toast("已经添加过了"); return; }
@@ -530,7 +571,6 @@ function addFromRegistry(rid) {
     document.getElementById("btnRegCancel").onclick = closeModal;
     document.getElementById("btnRegConfirm").onclick = () => {
       let finalGroup = r.group;
-      // 处理分组
       if (missingGroup) {
         const inputGroup = document.getElementById("reg-new-group").value.trim();
         if (inputGroup) {
@@ -543,7 +583,6 @@ function addFromRegistry(rid) {
         }
       }
       
-      // 处理标签
       let finalTags = [...(r.tags || [])];
       if (missingTags.length > 0) {
         const keep = confirm(`是否保留标签：${missingTags.join("、")}？\n点“确定”保留并新建，点“取消”自动剔除这些标签。`);
@@ -556,14 +595,14 @@ function addFromRegistry(rid) {
         }
       }
       
-      store.saveSettings(state.settings); // 保存新建的分组/标签
+      store.saveSettings(state.settings);
       
       let host = ""; try { host = new URL(r.invite).origin; } catch {}
       const obj = { id: uid(), name: r.name, invite: r.invite, shareLink: "", group: finalGroup, tags: finalTags, note: r.note || "", hasCheckin: ["有签到", "限制签到"].includes(finalGroup), todayCheckedIn: false, lastCheckinDate: "", balance: "", quotaPerUnit: "500000", currency: "CNY", apiEndpoint: host ? host : "", siteType: "newapi", modelRatio: "1", accessToken: "", userId: "", sourceId: r.id, createdAt: new Date().toISOString(), lastOpenedAt: "" };
       
       state.sites.push(obj); 
       store.saveSites(state.sites); 
-      renderGroupFilter(); renderTagFilter(); // 重新渲染筛选栏
+      renderGroupFilter(); renderTagFilter();
       renderList(); 
       renderRegistry();
       closeModal();
@@ -572,7 +611,6 @@ function addFromRegistry(rid) {
     return;
   }
 
-  // 正常无缺失，直接添加
   let host = ""; try { host = new URL(r.invite).origin; } catch {}
   const obj = { id: uid(), name: r.name, invite: r.invite, shareLink: "", group: r.group, tags: [...(r.tags || [])], note: r.note || "", hasCheckin: ["有签到", "限制签到"].includes(r.group), todayCheckedIn: false, lastCheckinDate: "", balance: "", quotaPerUnit: "500000", currency: "CNY", apiEndpoint: host ? host : "", siteType: "newapi", modelRatio: "1", accessToken: "", userId: "", sourceId: r.id, createdAt: new Date().toISOString(), lastOpenedAt: "" };
   state.sites.push(obj); 
@@ -836,7 +874,7 @@ window.openFetchPricesDrawer = () => {
       <button class="btn" style="flex:1; padding:6px; font-size:13px;" id="btnFetchSelectAll">全选当前列表</button>
       <button class="btn" style="flex:1; padding:6px; font-size:13px;" id="btnFetchDeselectAll">取消当前列表</button>
     </div>
-    <div style="max-height:35vh; overflow-y:auto; margin-bottom:12px; background:#fff; border:1.5px solid var(--border); border-radius:var(--radius); padding:0 12px;" id="fetchSiteList"></div>
+    <div style="max-height:35vh; overflow-y:auto; margin-bottom:12px; background:var(--card-bg); border:1.5px solid var(--border); border-radius:var(--radius); padding:0 12px;" id="fetchSiteList"></div>
     <div style="font-size:12px; color:var(--danger); background:#fdf5f5; padding:8px; border-radius:4px; margin-bottom:12px; line-height:1.5;">
       💡 提示：部分站点可能因接口限制或网络问题导致拉取失败。更新失败将保留原有数据；更新成功但返回空列表，则会清空该站旧数据。
     </div>
@@ -975,19 +1013,39 @@ document.getElementById("modelSearchInput").oninput = e => { state.modelSearch =
 
 /* ====== 设置与弹窗 ====== */
 function openSettings() {
-  // 使用暂存对象，改动不立即写入 state.settings
   const temp = JSON.parse(JSON.stringify(state.settings)); 
-  const w = temp.wallpaper || { type: "none", value: "", opacity: 0.82 }; 
+  const w = temp.wallpaper || { type: "none", value: "", opacity: 0.82, blur: 0 }; 
   const presetColors = ["#e8e4dd","#d4d9d6","#cfd6dc","#e3d8d2","#dcd8d0","#d9d5d0"];
+  const textColors = [
+    { name: '自动', val: 'auto' },
+    { name: '深色', val: 'dark' },
+    { name: '浅色', val: 'light' }
+  ];
   const appVersion = "v1.2.2"; 
   const cacheVersion = "v1.2.2"; 
   
+  const textColorHtml = textColors.map(c => `
+    <div class="text-color-opt ${temp.textMode === c.val ? 'active' : ''}" data-textmode="${c.val}">${c.name}</div>
+  `).join("");
+
   showModal(`
     <h3>设置</h3>
     <div class="settings-section"><h4>主题</h4><div class="theme-row"><button class="theme-btn ${temp.theme !== "mono" ? "active" : ""}" data-theme-btn="morandi">莫兰迪</button><button class="theme-btn ${temp.theme === "mono" ? "active" : ""}" data-theme-btn="mono">极简黑白</button></div></div>
-    <div class="settings-section"><h4>应用名称</h4><input id="s-appName" value="${esc(temp.appName)}" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--radius);background:#ffffff !important;color:#2d2b28 !important;-webkit-appearance:none;"></div>
     
-    <!-- 代理设置增加显隐和复制 -->
+    <!-- 新增文字颜色设置 -->
+    <div class="settings-section">
+      <h4>文字颜色</h4>
+      <div class="text-color-row" id="textColorPicker">
+        ${textColorHtml}
+      </div>
+      <div class="field" id="customTextColorField" style="display:${temp.textMode === 'custom' ? 'block' : 'none'}; margin-top:8px;">
+        <label>自定义文字颜色</label>
+        <input type="color" id="s-custom-text-color" value="${temp.customTextColor || '#2d2b28'}" style="height:40px; padding:0; border:none; background:none;">
+      </div>
+    </div>
+
+    <div class="settings-section"><h4>应用名称</h4><input id="s-appName" value="${esc(temp.appName)}" style="width:100%;padding:8px 10px;border:1.5px solid var(--border);border-radius:var(--radius);background:var(--card-bg) !important;color:var(--text) !important;-webkit-appearance:none;"></div>
+    
     <div class="settings-section">
       <h4>网络代理（解决跨域拉取余额）</h4>
       <div class="field">
@@ -1000,7 +1058,6 @@ function openSettings() {
       </div>
     </div>
     
-    <!-- 管理分组和标签 -->
     <div class="settings-section">
       <h4>分组与标签管理</h4>
       <div class="btn-row" style="margin-top:0;">
@@ -1014,6 +1071,10 @@ function openSettings() {
       <div class="field"><label>类型</label><select id="s-wallType"><option value="none" ${w.type === "none" ? "selected" : ""}>无</option><option value="color" ${w.type === "color" ? "selected" : ""}>纯色</option><option value="image" ${w.type === "image" ? "selected" : ""}>图片 URL / 本地上传</option></select></div>
       <div class="field" id="colorField" style="display:${w.type === "color" ? "block" : "none"}"><label>选颜色（点预设或自选）</label><div class="color-row"><input type="color" id="s-wallColor" value="${/^#[0-9a-fA-F]{6}$/.test(w.value || "") ? w.value : "#e8e4dd"}"><div class="preset-colors" id="presetColors">${presetColors.map(c => `<div class="preset-color" data-color="${c}" style="background:${c}" title="${c}"></div>`).join("")}</div></div></div>
       <div class="field" id="valueField" style="display:${w.type === "image" ? "block" : "none"}"><label>图片链接（或者是点下方按钮上传）</label><input id="s-wallValue" value="${esc(w.value && !w.value.startsWith('data:') ? w.value : '')}" placeholder="https://..."><div style="margin-top:8px"><input type="file" id="s-wallFile" accept="image/*" style="display:none"><button class="btn" style="width:100%;padding:8px;font-size:13px" onclick="document.getElementById('s-wallFile').click()">从相册选择图片上传</button></div></div>
+      
+      <!-- 新增背景模糊度 -->
+      <div class="field"><label>背景模糊度：<span id="blurVal">${w.blur || 0}px</span></label><input type="range" id="s-blur" min="0" max="20" value="${w.blur || 0}" style="width:100%"></div>
+      
       <div class="wall-preview" id="wallPreview"></div>
       <div class="field"><label>卡片不透明度：<span id="opVal">${Math.round((w.opacity || 0.82) * 100)}%</span></label><input type="range" id="s-opacity" min="40" max="100" value="${Math.round((w.opacity || 0.82) * 100)}" style="width:100%"></div>
     </div>
@@ -1033,14 +1094,12 @@ function openSettings() {
       <button class="btn danger" id="s-clear-data" style="width:100%;">清空所有数据</button>
     </div>
 
-    <!-- 底部保存与关闭 -->
-    <div class="btn-row" style="position:sticky; bottom:0; background:rgba(255,255,255,0.95); padding:12px 0; z-index:10; margin-top:16px; border-top:1px solid var(--border);">
+    <div class="btn-row" style="position:sticky; bottom:0; background:var(--card-bg); padding:12px 0; z-index:10; margin-top:16px; border-top:1px solid var(--border);">
       <button class="btn" id="s-close">关闭</button>
       <button class="btn primary" id="s-save">保存设置</button>
     </div>
   `);
   
-  // 绑定设置页内的管理按钮
   document.getElementById("s-manage-groups").onclick = () => openManageSettings('group', temp);
   document.getElementById("s-manage-tags").onclick = () => openManageSettings('tag', temp);
 
@@ -1050,10 +1109,46 @@ function openSettings() {
       temp.theme = b.dataset.themeBtn; 
       document.querySelectorAll("[data-theme-btn]").forEach(el => el.classList.remove("active"));
       b.classList.add("active");
-      // 主题预览
       document.documentElement.setAttribute("data-theme", temp.theme === "mono" ? "mono" : "morandi");
     }; 
   });
+
+  // 文字颜色选择逻辑
+  document.querySelectorAll(".text-color-opt").forEach(el => {
+    el.onclick = () => {
+      document.querySelectorAll(".text-color-opt").forEach(opt => opt.classList.remove("active"));
+      el.classList.add("active");
+      temp.textMode = el.dataset.textmode;
+      document.getElementById("customTextColorField").style.display = temp.textMode === 'custom' ? 'block' : 'none';
+      // 实时预览文字颜色
+      applyTempTextColor(temp);
+    };
+  });
+  document.getElementById("s-custom-text-color").oninput = e => {
+    temp.customTextColor = e.target.value;
+    applyTempTextColor(temp);
+  };
+  
+  function applyTempTextColor(t) {
+    let mode = t.textMode;
+    if (mode === 'auto') {
+      const wTemp = t.wallpaper;
+      if (wTemp.type === 'color' && wTemp.value && /^#[0-9a-fA-F]{6}$/.test(wTemp.value)) {
+        const hex = wTemp.value.replace('#', '');
+        const r = parseInt(hex.substr(0, 2), 16);
+        const g = parseInt(hex.substr(2, 2), 16);
+        const b = parseInt(hex.substr(4, 2), 16);
+        const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000;
+        mode = yiq < 128 ? "light" : "dark";
+      } else {
+        mode = "dark";
+      }
+    }
+    document.documentElement.setAttribute("data-text-mode", mode);
+    if (mode === 'custom') {
+      document.documentElement.style.setProperty("--custom-text-color", t.customTextColor || "#2d2b28");
+    }
+  }
   
   document.getElementById("s-appName").oninput = e => { temp.appName = e.target.value || "API小仓库"; };
   document.getElementById("s-proxyUrl").oninput = e => { temp.proxyUrl = e.target.value.trim(); };
@@ -1061,21 +1156,28 @@ function openSettings() {
   const preview = () => { 
     const type = document.getElementById("s-wallType").value; 
     const opacity = parseInt(document.getElementById("s-opacity").value, 10) / 100; 
+    const blur = parseInt(document.getElementById("s-blur").value, 10);
     let value = ""; 
     if (type === "color") { value = document.getElementById("s-wallColor").value; } 
     else if (type === "image") { 
       value = document.getElementById("s-wallValue").value.trim(); 
       if (!value && temp.wallpaper.type === "image" && temp.wallpaper.value.startsWith('data:')) value = temp.wallpaper.value; 
     } 
-    temp.wallpaper = { type, value, opacity }; 
-    // 壁纸预览
+    temp.wallpaper = { type, value, opacity, blur }; 
+    
+    // 实时预览壁纸和模糊
     const el = document.getElementById("wallpaper");
     let css = "transparent";
     if (type === "color" && value) css = value;
     else if (type === "image" && value) css = `url("${value}") center/cover no-repeat`;
     el.style.background = css;
+    el.style.filter = blur > 0 ? `blur(${blur}px)` : "none";
+    el.style.transform = blur > 0 ? `scale(${1 + blur/100})` : "scale(1)";
     document.documentElement.style.setProperty("--card-opacity", String(opacity));
     
+    // 如果当前是自动模式，背景变化时顺便重新计算文字颜色
+    if (temp.textMode === 'auto') applyTempTextColor(temp);
+
     const pv = document.getElementById("wallPreview"); 
     let pvCss = "transparent"; 
     if (type === "color") pvCss = value || "transparent"; 
@@ -1115,6 +1217,7 @@ function openSettings() {
     }; 
     reader.readAsDataURL(file); 
   };
+  document.getElementById("s-blur").oninput = e => { document.getElementById("blurVal").textContent = e.target.value + "px"; preview(); };
   document.getElementById("s-opacity").oninput = e => { document.getElementById("opVal").textContent = e.target.value + "%"; preview(); }; 
   preview();
   
@@ -1200,7 +1303,6 @@ function openSettings() {
   };
 }
 
-// 🚨 设置页里的分组/标签管理
 function openManageSettings(type, tempSettings) {
   const isGroup = type === 'group';
   const list = isGroup ? tempSettings.groups : tempSettings.tags;
@@ -1227,7 +1329,6 @@ function openManageSettings(type, tempSettings) {
     </div>
   `);
   
-  // 暂存当前管理状态，供回调使用
   window._tempManageSettings = tempSettings;
   document.getElementById("btnManageClose").onclick = () => openSettings();
 }
@@ -1252,9 +1353,6 @@ window.deleteManageItemSettings = (type, index) => {
   if (isGroup) {
     const usedCount = state.sites.filter(s => s.group === itemName).length;
     if (usedCount > 0) {
-      // 这里由于是暂存，无法直接修改 state.sites。
-      // 为了用户体验，提醒用户先保存设置，并在保存时处理转移，或者建议先转移。
-      // 简化处理：如果在设置页删除分组，弹出提示，要求先转移。
       return alert(`当前有 ${usedCount} 个站点正在使用该分组，请先在首页将这些站点转移到其他分组，再回来删除。`);
     }
   }
@@ -1262,12 +1360,6 @@ window.deleteManageItemSettings = (type, index) => {
   if (!confirm(`确定删除 ${isGroup ? '分组' : '标签'}「${itemName}」？`)) return;
   
   list.splice(index, 1);
-  
-  if (!isGroup) {
-    // 如果是标签，从暂存中剔除（当前站点的标签会在保存后同步清理，但这里只是为了UI方便）
-    // 真实清理会在用户点保存时，我们在别处处理。
-  }
-  
   openManageSettings(type, temp);
 };
 
@@ -1346,7 +1438,6 @@ function toast(msg) { const el = document.getElementById("toast"); el.textConten
 function bindEvents() {
   document.querySelectorAll(".nav-item").forEach(n => n.onclick = () => switchTab(n.dataset.tab));
   
-  // 🚨 公告渲染
   document.getElementById("btnNotice").onclick = () => {
     const readList = store.getReadNotices();
     const contactHtml = getContactHtml();
@@ -1478,7 +1569,6 @@ function bindEvents() {
   entryBtn.onclick = () => { panel.hidden = !panel.hidden; if (panel.hidden) entryBtn.classList.remove("open"); else { entryBtn.classList.add("open"); renderRegistry(); } };
   document.getElementById("regClose").onclick = () => { panel.hidden = true; entryBtn.classList.remove("open"); renderRegistry(); };
   document.getElementById("modalMask").onclick = e => { if (e.target.id === "modalMask") { 
-    // 如果关闭的是设置页，需要恢复原样
     if (document.getElementById("s-save")) {
       applyTheme(); applyWallpaper();
     }
