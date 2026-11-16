@@ -888,8 +888,8 @@ document.getElementById("modelSearchInput").oninput = e => { state.modelSearch =
 /* ====== 设置与弹窗 ====== */
 function openSettings() {
   const s = state.settings; const w = s.wallpaper || { type: "none", value: "", opacity: 0.82 }; const presetColors = ["#e8e4dd","#d4d9d6","#cfd6dc","#e3d8d2","#dcd8d0","#d9d5d0"];
-  const appVersion = "v1.2.1"; 
-  const cacheVersion = "v1.2.1"; 
+  const appVersion = "v1.2.2"; 
+  const cacheVersion = "v1.2.2"; 
   
   showModal(`
     <h3>设置</h3>
@@ -1068,12 +1068,15 @@ function toast(msg) { const el = document.getElementById("toast"); el.textConten
 
 function bindEvents() {
   document.querySelectorAll(".nav-item").forEach(n => n.onclick = () => switchTab(n.dataset.tab));
+  
+  // 🚨 核心重构：公告渲染逻辑
   document.getElementById("btnNotice").onclick = () => {
     const readList = store.getReadNotices();
     const contactHtml = getContactHtml();
     
     let html = `<h3>公告</h3>`;
     
+    // 联系方式区域（保持原样）
     if (contactHtml) {
       html += `
         <div class="notice-contact" style="padding:0; overflow:hidden; margin-bottom:12px;">
@@ -1088,26 +1091,73 @@ function bindEvents() {
       `;
     }
 
-    let notices = (REGISTRY.notice || []).slice();
-    notices.sort((a, b) => {
+    // 公告数据处理：附加原始索引以解决同日排序问题
+    let rawNotices = (REGISTRY.notice || []).map((n, i) => ({ ...n, originalIndex: i }));
+    
+    // 排序：置顶优先 -> 日期降序 -> 原始索引降序（后加的在上）
+    rawNotices.sort((a, b) => {
       const pinA = a.isPinned ? 1 : 0;
       const pinB = b.isPinned ? 1 : 0;
       if (pinA !== pinB) return pinB - pinA;
-      return (b.date || "").localeCompare(a.date || "");
+      const dateComp = (b.date || "").localeCompare(a.date || "");
+      if (dateComp !== 0) return dateComp;
+      return b.originalIndex - a.originalIndex;
     });
+
+    const pinnedNotices = rawNotices.filter(n => n.isPinned);
+    const historyNotices = rawNotices.filter(n => !n.isPinned);
+    
     const newReadList = [...readList];
-    if (notices.length === 0) html += `<div class="empty" style="padding:20px;">暂无公告</div>`;
-    else notices.forEach(n => { 
-      const pinHtml = n.isPinned ? '<span style="background:var(--danger);color:#fff;font-size:10px;padding:2px 4px;border-radius:4px;">置顶</span>' : '';
+
+    // 渲染单条公告的通用函数
+    const renderNoticeItem = (n) => {
+      const pinHtml = n.isPinned ? '<span style="background:var(--danger);color:#fff;font-size:10px;padding:2px 4px;border-radius:4px;margin-right:4px;">置顶</span>' : '';
       const noticeId = n.date + "_" + n.title;
       const isRead = readList.includes(noticeId);
+      const unreadDot = isRead ? '' : '<span class="unread-dot"></span>';
       if (!isRead) newReadList.push(noticeId);
+      
+      // 未读默认展开，已读默认折叠
       const expandedClass = isRead ? "" : "expanded";
-      html += `<div class="notice-card ${expandedClass}" data-id="${esc(noticeId)}"><div class="notice-header"><div class="left-part">${pinHtml}<span class="notice-title">${esc(n.title)}</span></div><div style="display:flex; align-items:center; gap:8px;"><span class="notice-date">${esc(n.date)}</span><span class="notice-arrow">▼</span></div></div><div class="notice-content">${linkify(n.content)}</div></div>`; 
-    });
+      
+      return `<div class="notice-card ${expandedClass}" data-id="${esc(noticeId)}">
+        <div class="notice-header">
+          <div class="left-part">${unreadDot}${pinHtml}<span class="notice-title">${esc(n.title)}</span></div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span class="notice-date">${esc(n.date)}</span><span class="notice-arrow">▼</span>
+          </div>
+        </div>
+        <div class="notice-content">${linkify(n.content)}</div>
+      </div>`; 
+    };
+
+    // 1. 渲染置顶公告区
+    if (pinnedNotices.length > 0) {
+      html += `<div style="font-size:12px; color:var(--text-2); margin-bottom:8px; font-weight:600;">最新置顶公告</div>`;
+      html += pinnedNotices.map(renderNoticeItem).join("");
+    }
+
+    // 2. 渲染历史公告区（带折叠）
+    if (historyNotices.length > 0) {
+      html += `
+        <div class="history-toggle" id="historyToggle">
+          <span>历史公告 (${historyNotices.length})</span>
+          <span class="arrow">▼</span>
+        </div>
+        <div class="history-list-wrap" id="historyList" style="display:none;">
+          ${historyNotices.map(renderNoticeItem).join("")}
+        </div>
+      `;
+    }
+
+    if (rawNotices.length === 0) {
+      html += `<div class="empty" style="padding:20px;">暂无公告</div>`;
+    }
+
     html += `<div class="btn-row"><button class="btn" id="btnCloseNotice">关闭</button></div>`;
     showModal(html); 
     
+    // 绑定联系方式折叠
     if (document.getElementById("contactToggle")) {
       document.getElementById("contactToggle").onclick = () => {
         const body = document.getElementById("contactBody");
@@ -1122,11 +1172,31 @@ function bindEvents() {
       };
     }
 
-    document.querySelectorAll(".notice-header").forEach(header => { header.onclick = () => { header.parentElement.classList.toggle("expanded"); }; });
+    // 绑定历史公告大折叠
+    if (document.getElementById("historyToggle")) {
+      document.getElementById("historyToggle").onclick = () => {
+        const list = document.getElementById("historyList");
+        const toggle = document.getElementById("historyToggle");
+        if (list.style.display === "none") {
+          list.style.display = "block";
+          toggle.classList.remove("collapsed");
+        } else {
+          list.style.display = "none";
+          toggle.classList.add("collapsed");
+        }
+      };
+    }
+
+    // 绑定单条公告折叠
+    document.querySelectorAll(".notice-header").forEach(header => { 
+      header.onclick = () => { header.parentElement.classList.toggle("expanded"); }; 
+    });
+    
     store.saveReadNotices(newReadList);
     document.getElementById("noticeBadge").style.display = "none";
     document.getElementById("btnCloseNotice").onclick = closeModal;
   };
+
   document.getElementById("btnSearch").onclick = () => { const bar = document.getElementById("searchBar"); bar.classList.toggle("show"); if (bar.classList.contains("show")) document.getElementById("searchInput").focus(); };
   document.getElementById("btnCloseSearch").onclick = () => { document.getElementById("searchBar").classList.remove("show"); document.getElementById("searchInput").value = ""; state.search = ""; renderList(); renderRegistry(); };
   document.getElementById("searchInput").oninput = e => { state.search = e.target.value; renderList(); renderRegistry(); };
