@@ -305,23 +305,38 @@ function openSiteForm(site) {
   document.getElementById("modalMask").classList.add("show");
 }
 
+// 🚨 修复：加入 try...catch，修复 idx 未定义导致崩溃的问题
 window.saveSiteForm = () => {
-  const id = document.getElementById("f-id").value;
-  const name = document.getElementById("f-name").value.trim();
-  const invite = document.getElementById("f-invite").value.trim();
-  if(!name || !invite) return alert("站名和链接必填");
+  try {
+    const id = document.getElementById("f-id").value;
+    const name = document.getElementById("f-name").value.trim();
+    const invite = document.getElementById("f-invite").value.trim();
+    
+    if(!name || !invite) {
+      alert("站名和链接必填");
+      return;
+    }
 
-  const activeGroup = document.querySelector("#groupPicker .chip.active");
-  const group = activeGroup ? activeGroup.dataset.group : "其他";
-  const tags = [...document.querySelectorAll("#tagPicker .chip.active")].map(c => c.dataset.tag);
-  const obj = { id, name, invite, group, tags, note: document.getElementById("f-note").value.trim() };
-  
-  if(idx >= 0) registry.sites[idx] = obj;
-  else registry.sites.push(obj);
+    const activeGroup = document.querySelector("#groupPicker .chip.active");
+    const group = activeGroup ? activeGroup.dataset.group : "其他";
+    const tags = [...document.querySelectorAll("#tagPicker .chip.active")].map(c => c.dataset.tag);
+    const obj = { id, name, invite, group, tags, note: document.getElementById("f-note").value.trim() };
+    
+    // 修复未定义变量
+    const idx = registry.sites.findIndex(x => x.id === id);
+    if(idx >= 0) {
+      registry.sites[idx] = obj;
+    } else {
+      registry.sites.push(obj);
+    }
 
-  saveToLocal();
-  closeModal();
-  renderSites();
+    saveToLocal();
+    closeModal();
+    renderSites();
+  } catch (err) {
+    alert("保存失败，可能存在非法数据：" + err.message);
+    console.error(err);
+  }
 };
 
 function openNoticeForm(notice, idx) {
@@ -347,22 +362,26 @@ function openNoticeForm(notice, idx) {
 }
 
 window.saveNoticeForm = () => {
-  const idxStr = document.getElementById("n-idx").value;
-  const date = document.getElementById("n-date").value.trim();
-  const title = document.getElementById("n-title").value.trim();
-  const content = document.getElementById("n-content").value.trim();
-  const isPinned = document.getElementById("n-pinned").checked;
-  if(!title || !content) return alert("标题和内容必填");
+  try {
+    const idxStr = document.getElementById("n-idx").value;
+    const date = document.getElementById("n-date").value.trim();
+    const title = document.getElementById("n-title").value.trim();
+    const content = document.getElementById("n-content").value.trim();
+    const isPinned = document.getElementById("n-pinned").checked;
+    if(!title || !content) return alert("标题和内容必填");
 
-  const obj = { date, title, content, isPinned };
-  if(idxStr !== '') {
-    registry.notice[Number(idxStr)] = obj;
-  } else {
-    registry.notice.push(obj); 
+    const obj = { date, title, content, isPinned };
+    if(idxStr !== '') {
+      registry.notice[Number(idxStr)] = obj;
+    } else {
+      registry.notice.push(obj); 
+    }
+    saveToLocal();
+    closeModal();
+    renderNotices();
+  } catch (err) {
+    alert("保存公告失败: " + err.message);
   }
-  saveToLocal();
-  closeModal();
-  renderNotices();
 };
 
 // ====== 动态联系方式设置 ======
