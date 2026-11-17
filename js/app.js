@@ -515,7 +515,7 @@ document.getElementById("btnSelectAllReg").onclick = () => {
   renderRegistry();
 };
 
-// 修复：彻底解决“一键批量添加”含有新标签/新分组的逻辑，改为汇总确认
+// 修复：批量添加时的汇总弹窗交互
 document.getElementById("btnBatchAddReg").onclick = () => {
   if(state.selectedRegIds.size === 0) return toast("请先勾选要添加的站点");
   
@@ -544,49 +544,33 @@ document.getElementById("btnBatchAddReg").onclick = () => {
     html += `<div style="font-size:14px; margin-bottom:12px;">即将添加 <b>${validToAddCount}</b> 个站点。</div>`;
     
     if (missingGroups.length > 0) {
-      html += `<div style="font-size:13px; color:var(--danger); margin-bottom:8px;">检测到缺少分组：${missingGroups.map(g => `【${esc(g)}】`).join("、")}。确认后将自动按原名称新建。</div>`;
+      html += `<div style="font-size:13px; color:var(--danger); margin-bottom:8px;">检测到缺少分组：${missingGroups.map(g => `【${esc(g)}】`).join("、")}。点击下方按钮将自动按原名称新建。</div>`;
     }
     
     if (missingTags.length > 0) {
-      html += `
-        <div class="field" style="margin-top:12px; background:rgba(138, 155, 168, 0.1); padding:10px; border-radius:6px;">
-          <div style="font-size:13px; color:var(--text-2); margin-bottom:8px;">检测到缺少标签：${missingTags.map(t => `【${esc(t)}】`).join("、")}</div>
-          <label class="check-row" style="margin-top:0; cursor:pointer;">
-            <input type="checkbox" id="batch-keep-tags" checked>
-            <span style="color:var(--text); font-weight:600;">保留并新建上述所有标签</span>
-          </label>
-          <div style="font-size:12px; color:var(--text-2); margin-top:4px; margin-left:20px;">如果不勾选，所有选中站点里的这些新标签将被剔除。</div>
-        </div>
-      `;
+      html += `<div style="font-size:13px; color:var(--text-2); margin-top:12px; background:rgba(138, 155, 168, 0.1); padding:10px; border-radius:6px;">
+        检测到缺少标签：${missingTags.map(t => `【${esc(t)}】`).join("、")}
+      </div>`;
     }
     
     html += `
       <div class="btn-row" style="margin-top:20px;">
-        <button class="btn" id="btnBatchCancel">取消</button>
-        <button class="btn primary" id="btnBatchConfirm">确认添加</button>
+        <button class="btn" id="btnBatchDropTags">剔除新标签并添加</button>
+        <button class="btn primary" id="btnBatchKeepTags">保留新标签并添加</button>
       </div>
     `;
     showModal(html);
     
-    document.getElementById("btnBatchCancel").onclick = closeModal;
-    document.getElementById("btnBatchConfirm").onclick = () => {
-      const keepTags = document.getElementById("batch-keep-tags") ? document.getElementById("batch-keep-tags").checked : false;
-      
+    // 剔除标签并添加
+    document.getElementById("btnBatchDropTags").onclick = () => {
       // 自动添加新分组
       missingGroups.forEach(g => { if (!state.settings.groups.includes(g)) state.settings.groups.push(g); });
-      // 根据选择处理新标签
-      if (keepTags) {
-        missingTags.forEach(t => { if (!state.settings.tags.includes(t)) state.settings.tags.push(t); });
-      }
       
       let count = 0;
       state.selectedRegIds.forEach(id => {
         const r = REGISTRY.sites.find(s => s.id === id);
         if (r && !state.sites.some(x => x.sourceId === r.id)) {
-          let finalTags = [...(r.tags || [])];
-          if (!keepTags) {
-            finalTags = finalTags.filter(t => !missingTags.includes(t));
-          }
+          let finalTags = (r.tags || []).filter(t => !missingTags.includes(t));
           let host = ""; try { host = new URL(r.invite).origin; } catch {}
           const obj = { id: uid(), name: r.name, invite: r.invite, shareLink: "", group: r.group, tags: finalTags, note: r.note || "", hasCheckin: ["有签到", "限制签到"].includes(r.group), todayCheckedIn: false, lastCheckinDate: "", balance: "", quotaPerUnit: "500000", currency: "CNY", apiEndpoint: host ? host : "", siteType: "newapi", modelRatio: "1", accessToken: "", userId: "", sourceId: r.id, createdAt: new Date().toISOString(), lastOpenedAt: "" };
           state.sites.push(obj);
@@ -600,7 +584,32 @@ document.getElementById("btnBatchAddReg").onclick = () => {
       renderList(); renderRegistry();
       state.selectedRegIds.clear();
       closeModal();
-      toast(`成功批量添加 ${count} 个站点`);
+      toast(`成功添加 ${count} 个站点（已剔除新标签）`);
+    };
+    
+    // 保留标签并添加
+    document.getElementById("btnBatchKeepTags").onclick = () => {
+      missingGroups.forEach(g => { if (!state.settings.groups.includes(g)) state.settings.groups.push(g); });
+      missingTags.forEach(t => { if (!state.settings.tags.includes(t)) state.settings.tags.push(t); });
+      
+      let count = 0;
+      state.selectedRegIds.forEach(id => {
+        const r = REGISTRY.sites.find(s => s.id === id);
+        if (r && !state.sites.some(x => x.sourceId === r.id)) {
+          let host = ""; try { host = new URL(r.invite).origin; } catch {}
+          const obj = { id: uid(), name: r.name, invite: r.invite, shareLink: "", group: r.group, tags: [...(r.tags || [])], note: r.note || "", hasCheckin: ["有签到", "限制签到"].includes(r.group), todayCheckedIn: false, lastCheckinDate: "", balance: "", quotaPerUnit: "500000", currency: "CNY", apiEndpoint: host ? host : "", siteType: "newapi", modelRatio: "1", accessToken: "", userId: "", sourceId: r.id, createdAt: new Date().toISOString(), lastOpenedAt: "" };
+          state.sites.push(obj);
+          count++;
+        }
+      });
+      
+      store.saveSettings(state.settings);
+      store.saveSites(state.sites);
+      renderGroupFilter(); renderTagFilter();
+      renderList(); renderRegistry();
+      state.selectedRegIds.clear();
+      closeModal();
+      toast(`成功添加 ${count} 个站点（已保留新标签）`);
     };
     return;
   }
@@ -619,7 +628,7 @@ document.getElementById("btnBatchAddReg").onclick = () => {
   toast(`成功添加 ${count} 个站点到我的站点`);
 };
 
-// 修复：单个添加逻辑，使用优雅的自定义弹窗
+// 修复：单个添加时的交互，按钮文字明确化
 function addFromRegistry(rid) {
   const r = REGISTRY.sites.find(s => s.id === rid); if (!r) return;
   if (state.sites.some(x => x.sourceId === r.id)) { toast("已经添加过了"); return; }
@@ -643,50 +652,33 @@ function addFromRegistry(rid) {
     if (missingTags.length > 0) {
       html += `
         <div class="field" style="margin-top:12px; background:rgba(138, 155, 168, 0.1); padding:10px; border-radius:6px;">
-          <div style="font-size:13px; color:var(--text-2); margin-bottom:8px;">本地缺少标签：${missingTags.map(t => `【${esc(t)}】`).join("、")}</div>
-          <label class="check-row" style="margin-top:0; cursor:pointer;">
-            <input type="checkbox" id="reg-keep-tags" checked>
-            <span style="color:var(--text); font-weight:600;">保留并新建这些标签</span>
-          </label>
-          <div style="font-size:12px; color:var(--text-2); margin-top:4px; margin-left:20px;">如果不勾选，将自动剔除这些标签后添加站点。</div>
+          <div style="font-size:13px; color:var(--text-2);">本地缺少标签：${missingTags.map(t => `【${esc(t)}】`).join("、")}</div>
         </div>
       `;
     }
     
     html += `
       <div class="btn-row" style="margin-top:20px;">
-        <button class="btn" id="btnRegCancel">取消</button>
-        <button class="btn primary" id="btnRegConfirm">确认添加</button>
+        <button class="btn" id="btnRegDropTags">剔除新标签并添加</button>
+        <button class="btn primary" id="btnRegKeepTags">保留新标签并添加</button>
       </div>
     `;
     showModal(html);
     
-    document.getElementById("btnRegCancel").onclick = closeModal;
-    document.getElementById("btnRegConfirm").onclick = () => {
+    // 剔除标签并添加
+    document.getElementById("btnRegDropTags").onclick = () => {
       let finalGroup = r.group;
       if (missingGroup) {
         const inputGroup = document.getElementById("reg-new-group").value.trim();
         if (inputGroup) {
           finalGroup = inputGroup;
-          if (!state.settings.groups.includes(finalGroup)) {
-            state.settings.groups.push(finalGroup);
-          }
+          if (!state.settings.groups.includes(finalGroup)) state.settings.groups.push(finalGroup);
         } else {
           finalGroup = "其他";
         }
       }
       
-      let finalTags = [...(r.tags || [])];
-      if (missingTags.length > 0) {
-        const keepTags = document.getElementById("reg-keep-tags").checked;
-        if (keepTags) {
-          missingTags.forEach(t => {
-            if (!state.settings.tags.includes(t)) state.settings.tags.push(t);
-          });
-        } else {
-          finalTags = finalTags.filter(t => !missingTags.includes(t));
-        }
-      }
+      let finalTags = (r.tags || []).filter(t => !missingTags.includes(t));
       
       store.saveSettings(state.settings);
       
@@ -699,7 +691,39 @@ function addFromRegistry(rid) {
       renderList(); 
       renderRegistry();
       closeModal();
-      toast("站点已成功添加");
+      toast("站点已添加（已剔除新标签）");
+    };
+    
+    // 保留标签并添加
+    document.getElementById("btnRegKeepTags").onclick = () => {
+      let finalGroup = r.group;
+      if (missingGroup) {
+        const inputGroup = document.getElementById("reg-new-group").value.trim();
+        if (inputGroup) {
+          finalGroup = inputGroup;
+          if (!state.settings.groups.includes(finalGroup)) state.settings.groups.push(finalGroup);
+        } else {
+          finalGroup = "其他";
+        }
+      }
+      
+      missingTags.forEach(t => {
+        if (!state.settings.tags.includes(t)) state.settings.tags.push(t);
+      });
+      let finalTags = [...(r.tags || [])];
+      
+      store.saveSettings(state.settings);
+      
+      let host = ""; try { host = new URL(r.invite).origin; } catch {}
+      const obj = { id: uid(), name: r.name, invite: r.invite, shareLink: "", group: finalGroup, tags: finalTags, note: r.note || "", hasCheckin: ["有签到", "限制签到"].includes(finalGroup), todayCheckedIn: false, lastCheckinDate: "", balance: "", quotaPerUnit: "500000", currency: "CNY", apiEndpoint: host ? host : "", siteType: "newapi", modelRatio: "1", accessToken: "", userId: "", sourceId: r.id, createdAt: new Date().toISOString(), lastOpenedAt: "" };
+      
+      state.sites.push(obj); 
+      store.saveSites(state.sites); 
+      renderGroupFilter(); renderTagFilter();
+      renderList(); 
+      renderRegistry();
+      closeModal();
+      toast("站点已添加（已保留新标签）");
     };
     return;
   }
