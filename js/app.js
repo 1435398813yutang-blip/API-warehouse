@@ -517,18 +517,38 @@ document.getElementById("btnSelectAllReg").onclick = () => {
   renderRegistry();
 };
 
+// 🚨 修复：批量添加的预检查
 document.getElementById("btnBatchAddReg").onclick = () => {
   if(state.selectedRegIds.size === 0) return toast("请先勾选要添加的站点");
+  
+  let hasMissing = false;
+  state.selectedRegIds.forEach(id => {
+    const r = REGISTRY.sites.find(s => s.id === id);
+    if (r && !state.sites.some(x => x.sourceId === r.id)) {
+      const missingGroup = r.group && !state.settings.groups.includes(r.group);
+      const missingTags = (r.tags || []).filter(t => !state.settings.tags.includes(t));
+      if (missingGroup || missingTags.length > 0) hasMissing = true;
+    }
+  });
+
+  if (hasMissing) {
+    return toast("选中的站点包含本地没有的分组或标签，请先逐个添加确认，或前往设置页手动新建。");
+  }
+
   let count = 0;
   state.selectedRegIds.forEach(id => {
     const r = REGISTRY.sites.find(s => s.id === id);
-    if(r && !state.sites.some(x => x.sourceId === r.id)) { addFromRegistry(id); count++; }
+    if(r && !state.sites.some(x => x.sourceId === r.id)) { 
+      addFromRegistry(id); 
+      count++; 
+    }
   });
   state.selectedRegIds.clear();
   renderRegistry();
   toast(`成功添加 ${count} 个站点到我的站点`);
 };
 
+// 🚨 修复：单个添加时的交互逻辑，去除原生 confirm，改为自定义弹窗内的复选框
 function addFromRegistry(rid) {
   const r = REGISTRY.sites.find(s => s.id === rid); if (!r) return;
   if (state.sites.some(x => x.sourceId === r.id)) { toast("已经添加过了"); return; }
@@ -537,26 +557,37 @@ function addFromRegistry(rid) {
   const missingTags = (r.tags || []).filter(t => !state.settings.tags.includes(t));
   
   if (missingGroup || missingTags.length > 0) {
-    let html = `<h3>添加提示</h3><div style="font-size:14px; line-height:1.8; margin-bottom:16px;">`;
+    let html = `<h3>添加提示</h3>`;
+    html += `<div style="font-size:14px; color:var(--text); margin-bottom:12px;">即将添加站点：<b>${esc(r.name)}</b></div>`;
+    
     if (missingGroup) {
-      html += `<div style="color:var(--danger); margin-bottom:8px;">⚠️ 你本地没有分组【${esc(r.group)}】。</div>`;
       html += `
         <div class="field" style="margin-top:12px;">
-          <label>请选择或输入新的分组名称（输入新名称保存将自动新建）：</label>
+          <label>本地缺少分组【${esc(r.group)}】，请选择或输入新的分组名称：</label>
           <input type="text" id="reg-new-group" value="${esc(r.group)}" list="regGroupList" style="width:100%; padding:10px; border:1.5px solid var(--border); border-radius:6px;">
           <datalist id="regGroupList">${state.settings.groups.map(g => `<option value="${esc(g)}">`).join("")}</datalist>
         </div>
       `;
     }
     if (missingTags.length > 0) {
-      html += `<div style="color:var(--danger); margin-bottom:8px; margin-top:12px;">⚠️ 你本地没有标签：${missingTags.map(t => `【${esc(t)}】`).join("、")}。</div>`;
-      html += `<div style="font-size:13px;">是否保留这些标签并将其添加到你的本地标签库？</div>`;
+      html += `
+        <div class="field" style="margin-top:12px; background:rgba(138, 155, 168, 0.1); padding:10px; border-radius:6px;">
+          <div style="font-size:13px; color:var(--text-2); margin-bottom:8px;">本地缺少标签：${missingTags.map(t => `【${esc(t)}】`).join("、")}</div>
+          <label class="check-row" style="margin-top:0; cursor:pointer;">
+            <input type="checkbox" id="reg-keep-tags" checked>
+            <span style="color:var(--text); font-weight:600;">保留并新建这些标签</span>
+          </label>
+          <div style="font-size:12px; color:var(--text-2); margin-top:4px; margin-left:20px;">如果不勾选，将自动剔除这些标签后添加站点。</div>
+        </div>
+      `;
     }
-    html += `</div>
+    
+    html += `
       <div class="btn-row" style="margin-top:20px;">
-        <button class="btn" id="btnRegCancel">取消添加</button>
+        <button class="btn" id="btnRegCancel">取消</button>
         <button class="btn primary" id="btnRegConfirm">确认添加</button>
-      </div>`;
+      </div>
+    `;
     showModal(html);
     
     document.getElementById("btnRegCancel").onclick = closeModal;
@@ -576,13 +607,13 @@ function addFromRegistry(rid) {
       
       let finalTags = [...(r.tags || [])];
       if (missingTags.length > 0) {
-        const keep = confirm(`是否保留标签：${missingTags.join("、")}？\n点“确定”保留并新建，点“取消”自动剔除这些标签。`);
-        if (!keep) {
-          finalTags = finalTags.filter(t => !missingTags.includes(t));
-        } else {
+        const keepTags = document.getElementById("reg-keep-tags").checked;
+        if (keepTags) {
           missingTags.forEach(t => {
             if (!state.settings.tags.includes(t)) state.settings.tags.push(t);
           });
+        } else {
+          finalTags = finalTags.filter(t => !missingTags.includes(t));
         }
       }
       
@@ -602,6 +633,7 @@ function addFromRegistry(rid) {
     return;
   }
 
+  // 正常无缺失，直接添加
   let host = ""; try { host = new URL(r.invite).origin; } catch {}
   const obj = { id: uid(), name: r.name, invite: r.invite, shareLink: "", group: r.group, tags: [...(r.tags || [])], note: r.note || "", hasCheckin: ["有签到", "限制签到"].includes(r.group), todayCheckedIn: false, lastCheckinDate: "", balance: "", quotaPerUnit: "500000", currency: "CNY", apiEndpoint: host ? host : "", siteType: "newapi", modelRatio: "1", accessToken: "", userId: "", sourceId: r.id, createdAt: new Date().toISOString(), lastOpenedAt: "" };
   state.sites.push(obj); 
@@ -1320,7 +1352,7 @@ function openManageSettings(type, tempSettings) {
   
   window._tempManageSettings = tempSettings;
   document.getElementById("btnManageClose").onclick = () => {
-    openSettings(); // 这里不会重置 currentSettingsTemp
+    openSettings(); 
   };
 }
 
