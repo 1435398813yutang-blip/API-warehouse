@@ -42,7 +42,6 @@ const state = {
   customGroupRatios: {} 
 };
 
-// 核心修复：设置页暂存全局变量，防丢失
 let currentSettingsTemp = null;
 
 function uid() { return "s_" + Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
@@ -405,7 +404,6 @@ function openSiteForm(id) {
     <div class="field"><label>站点架构类型（用于拉取余额）</label><select id="f-siteType"><option value="newapi" ${s.siteType === "newapi" ? "selected" : ""}>New API 体系</option><option value="sub2api" ${s.siteType === "sub2api" ? "selected" : ""}>Sub2API 体系</option><option value="deepseek" ${s.siteType === "deepseek" ? "selected" : ""}>DeepSeek 官方</option><option value="siliconflow" ${s.siteType === "siliconflow" ? "selected" : ""}>硅基流动</option><option value="manual" ${s.siteType === "manual" ? "selected" : ""}>仅手动记录</option></select></div>
     <div class="field"><label>API 端点</label><input id="f-api" value="${esc(s.apiEndpoint)}" placeholder="如 https://api.xxx.com"></div>
     
-    <!-- 访问令牌小按钮 -->
     <div class="field">
       <label>访问令牌</label>
       <div class="input-with-action">
@@ -517,24 +515,97 @@ document.getElementById("btnSelectAllReg").onclick = () => {
   renderRegistry();
 };
 
-// 🚨 修复：批量添加的预检查
+// 修复：彻底解决“一键批量添加”含有新标签/新分组的逻辑，改为汇总确认
 document.getElementById("btnBatchAddReg").onclick = () => {
   if(state.selectedRegIds.size === 0) return toast("请先勾选要添加的站点");
   
-  let hasMissing = false;
+  let missingTagsSet = new Set();
+  let missingGroupsSet = new Set();
+  let validToAddCount = 0;
+
   state.selectedRegIds.forEach(id => {
     const r = REGISTRY.sites.find(s => s.id === id);
     if (r && !state.sites.some(x => x.sourceId === r.id)) {
-      const missingGroup = r.group && !state.settings.groups.includes(r.group);
-      const missingTags = (r.tags || []).filter(t => !state.settings.tags.includes(t));
-      if (missingGroup || missingTags.length > 0) hasMissing = true;
+      validToAddCount++;
+      if (r.group && !state.settings.groups.includes(r.group)) missingGroupsSet.add(r.group);
+      (r.tags || []).forEach(t => {
+        if (!state.settings.tags.includes(t)) missingTagsSet.add(t);
+      });
     }
   });
 
-  if (hasMissing) {
-    return toast("选中的站点包含本地没有的分组或标签，请先逐个添加确认，或前往设置页手动新建。");
+  if (validToAddCount === 0) return toast("选中的站点都已经添加过了");
+
+  const missingTags = [...missingTagsSet];
+  const missingGroups = [...missingGroupsSet];
+
+  if (missingTags.length > 0 || missingGroups.length > 0) {
+    let html = `<h3>批量添加确认</h3>`;
+    html += `<div style="font-size:14px; margin-bottom:12px;">即将添加 <b>${validToAddCount}</b> 个站点。</div>`;
+    
+    if (missingGroups.length > 0) {
+      html += `<div style="font-size:13px; color:var(--danger); margin-bottom:8px;">检测到缺少分组：${missingGroups.map(g => `【${esc(g)}】`).join("、")}。确认后将自动按原名称新建。</div>`;
+    }
+    
+    if (missingTags.length > 0) {
+      html += `
+        <div class="field" style="margin-top:12px; background:rgba(138, 155, 168, 0.1); padding:10px; border-radius:6px;">
+          <div style="font-size:13px; color:var(--text-2); margin-bottom:8px;">检测到缺少标签：${missingTags.map(t => `【${esc(t)}】`).join("、")}</div>
+          <label class="check-row" style="margin-top:0; cursor:pointer;">
+            <input type="checkbox" id="batch-keep-tags" checked>
+            <span style="color:var(--text); font-weight:600;">保留并新建上述所有标签</span>
+          </label>
+          <div style="font-size:12px; color:var(--text-2); margin-top:4px; margin-left:20px;">如果不勾选，所有选中站点里的这些新标签将被剔除。</div>
+        </div>
+      `;
+    }
+    
+    html += `
+      <div class="btn-row" style="margin-top:20px;">
+        <button class="btn" id="btnBatchCancel">取消</button>
+        <button class="btn primary" id="btnBatchConfirm">确认添加</button>
+      </div>
+    `;
+    showModal(html);
+    
+    document.getElementById("btnBatchCancel").onclick = closeModal;
+    document.getElementById("btnBatchConfirm").onclick = () => {
+      const keepTags = document.getElementById("batch-keep-tags") ? document.getElementById("batch-keep-tags").checked : false;
+      
+      // 自动添加新分组
+      missingGroups.forEach(g => { if (!state.settings.groups.includes(g)) state.settings.groups.push(g); });
+      // 根据选择处理新标签
+      if (keepTags) {
+        missingTags.forEach(t => { if (!state.settings.tags.includes(t)) state.settings.tags.push(t); });
+      }
+      
+      let count = 0;
+      state.selectedRegIds.forEach(id => {
+        const r = REGISTRY.sites.find(s => s.id === id);
+        if (r && !state.sites.some(x => x.sourceId === r.id)) {
+          let finalTags = [...(r.tags || [])];
+          if (!keepTags) {
+            finalTags = finalTags.filter(t => !missingTags.includes(t));
+          }
+          let host = ""; try { host = new URL(r.invite).origin; } catch {}
+          const obj = { id: uid(), name: r.name, invite: r.invite, shareLink: "", group: r.group, tags: finalTags, note: r.note || "", hasCheckin: ["有签到", "限制签到"].includes(r.group), todayCheckedIn: false, lastCheckinDate: "", balance: "", quotaPerUnit: "500000", currency: "CNY", apiEndpoint: host ? host : "", siteType: "newapi", modelRatio: "1", accessToken: "", userId: "", sourceId: r.id, createdAt: new Date().toISOString(), lastOpenedAt: "" };
+          state.sites.push(obj);
+          count++;
+        }
+      });
+      
+      store.saveSettings(state.settings);
+      store.saveSites(state.sites);
+      renderGroupFilter(); renderTagFilter();
+      renderList(); renderRegistry();
+      state.selectedRegIds.clear();
+      closeModal();
+      toast(`成功批量添加 ${count} 个站点`);
+    };
+    return;
   }
 
+  // 无缺失，直接添加
   let count = 0;
   state.selectedRegIds.forEach(id => {
     const r = REGISTRY.sites.find(s => s.id === id);
@@ -548,7 +619,7 @@ document.getElementById("btnBatchAddReg").onclick = () => {
   toast(`成功添加 ${count} 个站点到我的站点`);
 };
 
-// 🚨 修复：单个添加时的交互逻辑，去除原生 confirm，改为自定义弹窗内的复选框
+// 修复：单个添加逻辑，使用优雅的自定义弹窗
 function addFromRegistry(rid) {
   const r = REGISTRY.sites.find(s => s.id === rid); if (!r) return;
   if (state.sites.some(x => x.sourceId === r.id)) { toast("已经添加过了"); return; }
@@ -633,7 +704,7 @@ function addFromRegistry(rid) {
     return;
   }
 
-  // 正常无缺失，直接添加
+  // 无缺失直接添加
   let host = ""; try { host = new URL(r.invite).origin; } catch {}
   const obj = { id: uid(), name: r.name, invite: r.invite, shareLink: "", group: r.group, tags: [...(r.tags || [])], note: r.note || "", hasCheckin: ["有签到", "限制签到"].includes(r.group), todayCheckedIn: false, lastCheckinDate: "", balance: "", quotaPerUnit: "500000", currency: "CNY", apiEndpoint: host ? host : "", siteType: "newapi", modelRatio: "1", accessToken: "", userId: "", sourceId: r.id, createdAt: new Date().toISOString(), lastOpenedAt: "" };
   state.sites.push(obj); 
@@ -1073,7 +1144,6 @@ function openSettings() {
     <div class="settings-section">
       <h4>网络代理（解决跨域拉取余额）</h4>
       <div class="field">
-        <!-- 代理小按钮 -->
         <div class="input-with-action">
           <input id="s-proxyUrl" type="password" value="${esc(temp.proxyUrl || '')}" placeholder="填入你的 Cloudflare Worker 地址">
           <button class="action-btn" onclick="const i=document.getElementById('s-proxyUrl'); i.type = i.type==='password' ? 'text' : 'password'; this.textContent = i.type==='password' ? '👁️' : '🔒';">👁️</button>
@@ -1304,7 +1374,7 @@ function openSettings() {
   };
 
   document.getElementById("s-close").onclick = () => {
-    currentSettingsTemp = null; // 清空暂存
+    currentSettingsTemp = null;
     applyTheme(); 
     applyWallpaper();
     closeModal();
@@ -1313,7 +1383,7 @@ function openSettings() {
   document.getElementById("s-save").onclick = () => {
     state.settings = temp;
     store.saveSettings(state.settings);
-    currentSettingsTemp = null; // 保存后清空
+    currentSettingsTemp = null;
     applyTheme(); 
     applyWallpaper();
     renderGroupFilter(); 
@@ -1608,7 +1678,7 @@ function bindEvents() {
   document.getElementById("modalMask").onclick = e => { 
     if (e.target.id === "modalMask") { 
       if (document.getElementById("s-save")) {
-        currentSettingsTemp = null; // 点遮罩关闭设置页也要清空暂存
+        currentSettingsTemp = null;
         applyTheme(); applyWallpaper();
       }
       closeModal(); 
