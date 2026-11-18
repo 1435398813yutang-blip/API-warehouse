@@ -24,7 +24,7 @@
 
     main{padding:16px 16px 90px}
     
-    /* ====== 新增：管理菜单模块 ====== */
+    /* ====== 管理菜单模块 ====== */
     .menu-panel {
       background: #fff;
       border: 1.5px solid var(--border);
@@ -49,7 +49,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      height: 40px; /* 统一高度 */
+      height: 40px;
       padding: 0 4px;
       border-radius: var(--radius);
       border: 1.5px solid var(--border);
@@ -58,7 +58,7 @@
       font-size: 13px;
       font-weight: 500;
       cursor: pointer;
-      white-space: nowrap; /* 强制不换行 */
+      white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
       transition: background-color 0.2s;
@@ -122,10 +122,13 @@
     .btn.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
     .btn.danger{color:var(--danger);border-color:var(--danger)}
 
-    /* 右下角导出按钮 (保持原样不动) */
-    .fab{position:fixed;right:16px;bottom:20px;padding:0 20px;height:48px;border-radius:24px;
+    /* 右下角悬浮按钮组：导出 + 一键发布 */
+    .fab-wrap{position:fixed;right:16px;bottom:20px;display:flex;gap:10px;z-index:30}
+    .fab{padding:0 20px;height:48px;border-radius:24px;
       background:var(--accent);color:#fff;border:none;font-size:15px;font-weight:600;
-      box-shadow:0 4px 12px rgba(0,0,0,.2);cursor:pointer;z-index:30;display:flex;align-items:center;justify-content:center}
+      box-shadow:0 4px 12px rgba(0,0,0,.2);cursor:pointer;display:flex;align-items:center;justify-content:center}
+    .fab:disabled{opacity:.6}
+    .fab.publish{background:#5f7d8c}
 
     .modal-mask{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:50;display:none;align-items:flex-end;justify-content:center}
     .modal-mask.show{display:flex}
@@ -153,6 +156,11 @@
     .manage-item { display: flex; justify-content: space-between; align-items: center; padding: 8px; border-bottom: 1px dashed #ddd; font-size: 14px; }
     .manage-item:last-child { border-bottom: none; }
     .manage-item button { padding: 2px 8px; font-size: 12px; border: 1px solid var(--danger); color: var(--danger); background: transparent; border-radius: 4px; cursor: pointer; }
+
+    /* 发布配置状态 */
+    .publish-status{font-size:13px;margin-left:8px}
+    .publish-status.ok{color:#2e7d32}
+    .publish-status.no{color:#999}
   </style>
 </head>
 <body>
@@ -162,7 +170,7 @@
 </header>
 
 <main>
-  <!-- 新增：管理菜单模块 -->
+  <!-- 管理菜单模块 -->
   <div class="menu-panel">
     <div class="menu-title">管理菜单</div>
     <div class="menu-grid">
@@ -179,7 +187,7 @@
       <!-- 第三行 -->
       <button class="menu-btn" id="btnImport">导入</button>
       <button class="menu-btn" id="btnReset">恢复线上</button>
-      <div></div> <!-- 占位空位 -->
+      <button class="menu-btn" id="btnPublishConfig">发布配置</button>
     </div>
   </div>
 
@@ -196,8 +204,11 @@
 <!-- 隐藏的文件输入框 -->
 <input type="file" id="fileImport" accept=".json" style="display:none">
 
-<!-- 右下角悬浮导出按钮 (保持不动) -->
-<button class="fab" id="btnExport">导出 JSON</button>
+<!-- 右下角悬浮按钮组 -->
+<div class="fab-wrap">
+  <button class="fab" id="btnExport">导出 JSON</button>
+  <button class="fab publish" id="btnPublish">一键发布</button>
+</div>
 
 <div class="modal-mask" id="modalMask">
   <div class="modal" id="modalBox"></div>
@@ -213,6 +224,8 @@ let currentTags = [];
 let collapsedGroups = [];
 
 const STORAGE_KEY = 'api_tool_registry_draft';
+const PUBLISH_CONFIG_KEY = 'admin_publish_config';
+let sessionPublishPassword = ''; // 发布密码仅存内存，关闭页面即失效
 
 function saveToLocal() { localStorage.setItem(STORAGE_KEY, JSON.stringify(registry)); }
 
@@ -254,10 +267,8 @@ function renderNotices() {
     return;
   }
 
-  // 1. 附加索引用于排序
   let sortedNotices = notices.map((n, i) => ({ ...n, originalIndex: i }));
 
-  // 2. 排序：置顶 > 日期降序 > 原始索引降序
   sortedNotices.sort((a, b) => {
     const pinA = a.isPinned ? 1 : 0;
     const pinB = b.isPinned ? 1 : 0;
@@ -267,7 +278,6 @@ function renderNotices() {
     return b.originalIndex - a.originalIndex;
   });
 
-  // 3. 渲染每条公告（带折叠）
   wrap.innerHTML = sortedNotices.map((n) => {
     const pinHtml = n.isPinned ? '<span class="pin-badge">置顶</span>' : '';
     return `<div class="admin-notice-card" data-idx="${n.originalIndex}">
@@ -288,7 +298,6 @@ function renderNotices() {
     </div>`;
   }).join("");
 
-  // 4. 绑定折叠事件
   wrap.querySelectorAll(".admin-notice-header").forEach(header => {
     header.onclick = () => { header.parentElement.classList.toggle("expanded"); };
   });
@@ -595,12 +604,118 @@ window.saveSettings = () => {
   alert("联系方式已更新并自动保存至草稿，请记得导出并替换文件");
 };
 
+// ===== 一键发布模块 =====
+function openPublishConfig() {
+  const saved = localStorage.getItem(PUBLISH_CONFIG_KEY) || '';
+  document.getElementById("modalBox").innerHTML = `
+    <h3>发布配置（一键发布到线上）</h3>
+    <div class="field">
+      <label>Worker 地址</label>
+      <input id="p-worker-url" placeholder="https://xxx.workers.dev" value="${saved}">
+    </div>
+    <div class="btn-row" style="border:none;">
+      <button class="btn primary" onclick="savePublishConfig()">保存配置</button>
+    </div>
+    <div id="p-config-status" class="publish-status ${saved ? 'ok' : 'no'}" style="margin-top:8px;">${saved ? '●已配置' : '●未配置'}</div>
+    <p style="font-size:12px;color:#999;margin-top:12px;">发布密码不保存，每次打开页面后首次发布时输入。发布前会展示确认弹窗。</p>
+    <div class="btn-row" style="border:none;margin-top:20px;">
+      <button class="btn" onclick="closeModal()">关闭</button>
+    </div>
+  `;
+  document.getElementById("modalMask").classList.add("show");
+}
+
+window.savePublishConfig = () => {
+  const url = document.getElementById("p-worker-url").value.trim().replace(/\/+$/, '');
+  if (!url || !url.startsWith('https://')) { alert('请填写正确的 Worker 地址（https:// 开头）'); return; }
+  localStorage.setItem(PUBLISH_CONFIG_KEY, url);
+  const el = document.getElementById("p-config-status");
+  el.textContent = '●已配置';
+  el.className = 'publish-status ok';
+  alert('已保存');
+};
+
+window.startPublish = () => {
+  const workerUrl = localStorage.getItem(PUBLISH_CONFIG_KEY);
+  if (!workerUrl) { alert('请先在菜单"发布配置"中填写 Worker 地址'); openPublishConfig(); return; }
+  if (!sessionPublishPassword) { openPublishPasswordModal(); return; }
+  openPublishConfirm();
+};
+
+function openPublishPasswordModal() {
+  document.getElementById("modalBox").innerHTML = `
+    <h3>输入发布密码</h3>
+    <div class="field"><input type="password" id="p-password" placeholder="发布密码"></div>
+    <div class="field" style="display:flex; align-items:center; gap:8px;">
+      <input type="checkbox" id="p-remember" checked style="width:16px; height:16px; margin:0;">
+      <label for="p-remember" style="margin:0; cursor:pointer;">本次会话记住（关闭页面后失效）</label>
+    </div>
+    <div class="btn-row" style="border:none;margin-top:20px;">
+      <button class="btn" onclick="closeModal()">取消</button>
+      <button class="btn primary" onclick="submitPublishPassword()">确定</button>
+    </div>
+  `;
+  document.getElementById("modalMask").classList.add("show");
+}
+
+window.submitPublishPassword = () => {
+  const pwd = document.getElementById("p-password").value;
+  if (!pwd) { alert('密码不能为空'); return; }
+  if (document.getElementById("p-remember").checked) sessionPublishPassword = pwd;
+  openPublishConfirm();
+};
+
+function openPublishConfirm() {
+  const siteCount = (registry.sites || []).length;
+  const noticeCount = (registry.notice || []).length;
+  document.getElementById("modalBox").innerHTML = `
+    <h3>确认发布？</h3>
+    <p style="font-size:14px;line-height:1.8;">站点数量：${siteCount}<br>公告数量：${noticeCount}<br>数据日期：${registry.updatedAt || '未知'}</p>
+    <p style="font-size:12px;color:#999;">发布后将自动提交到 GitHub 仓库，Pages 自动重新部署，约 1-2 分钟生效。</p>
+    <div class="btn-row" style="border:none;margin-top:20px;">
+      <button class="btn" onclick="closeModal()">取消</button>
+      <button class="btn primary" id="p-confirm-btn" onclick="doPublish()">确认发布</button>
+    </div>
+  `;
+  document.getElementById("modalMask").classList.add("show");
+}
+
+window.doPublish = async () => {
+  const btn = document.getElementById("p-confirm-btn");
+  btn.disabled = true; btn.textContent = '发布中…';
+  try {
+    const workerUrl = localStorage.getItem(PUBLISH_CONFIG_KEY);
+    registry.updatedAt = new Date().toISOString().split('T')[0];
+    const res = await fetch(workerUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ password: sessionPublishPassword, content: JSON.stringify(registry, null, 2) })
+    });
+    const data = await res.json();
+    closeModal();
+    saveToLocal();
+    if (data.ok) {
+      alert('发布成功！GitHub 正在自动部署，约 1-2 分钟后前台生效。');
+    } else {
+      if ((data.error || '').indexOf('密码') > -1) sessionPublishPassword = '';
+      alert('发布失败：' + (data.error || '未知错误') + '\n\n可使用右下角"导出 JSON"手动上传到 GitHub 兜底。');
+    }
+  } catch (e) {
+    closeModal();
+    alert('发布失败：网络错误 ' + e.message + '\n\n可使用"导出 JSON"手动上传兜底。');
+  } finally {
+    if (btn) { btn.disabled = false; btn.textContent = '确认发布'; }
+  }
+};
+
 // 事件绑定
 document.getElementById("btnAddSite").onclick = () => openSiteForm(null);
 document.getElementById("btnAddNotice").onclick = () => openNoticeForm(null);
 document.getElementById("btnSettings").onclick = openSettings;
 document.getElementById("btnManageGroups").onclick = () => openManage('group');
 document.getElementById("btnManageTags").onclick = () => openManage('tag');
+document.getElementById("btnPublishConfig").onclick = openPublishConfig;
+document.getElementById("btnPublish").onclick = () => window.startPublish();
 
 document.getElementById('btnImport').onclick = () => document.getElementById('fileImport').click();
 
