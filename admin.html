@@ -168,6 +168,11 @@
     .pv-badge.del{background:var(--danger)}
     .pv-title{font-weight:600;font-size:13px;display:inline}
     .pv-sub{font-size:11px;color:var(--text-2);margin-top:4px;word-break:break-all}
+    .pv-tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+    .pv-tag{font-size:10px;padding:1px 6px;border-radius:4px;background:var(--accent-soft);color:#fff}
+    .pv-note{font-size:11px;color:var(--text-2);margin-top:4px;white-space:pre-wrap;word-break:break-word}
+    .pv-diff{font-size:11px;margin-top:6px;padding-top:6px;border-top:1px dashed #eee;color:var(--text-2);word-break:break-all;line-height:1.7}
+    .pv-diff b{color:var(--text);font-weight:600}
     .pv-body{font-size:12px;color:var(--text-2);white-space:pre-wrap;word-break:break-word;margin-top:8px;padding-top:8px;border-top:1px dashed #eee}
     .pv-count{font-size:13px;font-weight:600;margin-bottom:8px}
     .pv-warn{font-size:12px;color:#b57b7b;margin-bottom:8px}
@@ -232,7 +237,7 @@ let collapsedGroups = [];
 const STORAGE_KEY = 'api_tool_registry_draft';
 const PUBLISH_CONFIG_KEY = 'admin_publish_config';
 let sessionPublishPassword = '';
-let publishPasswordTemp = ''; // 本次发布流程中的临时密码（未勾记住时用）
+let publishPasswordTemp = '';
 
 function saveToLocal() { localStorage.setItem(STORAGE_KEY, JSON.stringify(registry)); }
 
@@ -607,7 +612,7 @@ window.saveSettings = () => {
   registry.contact = newContact;
   saveToLocal();
   closeModal();
-  alert("联系方式已更新并自动保存至草稿，请记得导出并替换文件");
+  alert("联系方式已更新并自动保存至草稿");
 };
 
 // ===== 一键发布模块 =====
@@ -645,7 +650,6 @@ window.startPublish = async () => {
   const workerUrl = localStorage.getItem(PUBLISH_CONFIG_KEY);
   if (!workerUrl) { alert('请先在菜单"发布配置"中填写 Worker 地址'); openPublishConfig(); return; }
 
-  // 密码：会话内已有则直接用，否则先记在临时变量，勾了记住才升级为会话密码
   if (!sessionPublishPassword) {
     publishPasswordTemp = '';
     document.getElementById("modalBox").innerHTML = `
@@ -683,7 +687,31 @@ async function fetchOnlineRegistry() {
   } catch (e) { return null; }
 }
 
-// 对比逻辑：站点按 id，公告按 date+title
+// 差异字段提取（站点）
+function siteDiffFields(oldS, newS) {
+  const lines = [];
+  if ((oldS.name || '') !== (newS.name || '')) lines.push(`<b>站名：</b>${oldS.name || '(空)'} → ${newS.name || '(空)'}`);
+  if ((oldS.invite || '') !== (newS.invite || '')) lines.push(`<b>链接：</b>${oldS.invite || '(空)'} → ${newS.invite || '(空)'}`);
+  if ((oldS.group || '') !== (newS.group || '')) lines.push(`<b>分组：</b>${oldS.group || '(空)'} → ${newS.group || '(空)'}`);
+  const oldTags = JSON.stringify(oldS.tags || []);
+  const newTags = JSON.stringify(newS.tags || []);
+  if (oldTags !== newTags) {
+    lines.push(`<b>标签：</b>${(oldS.tags || []).join('、') || '(无)'} → ${(newS.tags || []).join('、') || '(无)'}`);
+  }
+  if ((oldS.note || '') !== (newS.note || '')) lines.push(`<b>备注：</b>${oldS.note || '(空)'} → ${newS.note || '(空)'}`);
+  return lines;
+}
+
+// 差异字段提取（公告）
+function noticeDiffFields(oldN, newN) {
+  const lines = [];
+  if ((oldN.content || '') !== (newN.content || '')) lines.push(`<b>内容：</b>有改动（展开卡片查看新内容）`);
+  if (!!oldN.isPinned !== !!newN.isPinned) lines.push(`<b>置顶：</b>${oldN.isPinned ? '是' : '否'} → ${newN.isPinned ? '是' : '否'}`);
+  if ((oldN.date || '') !== (newN.date || '')) lines.push(`<b>日期：</b>${oldN.date || ''} → ${newN.date || ''}`);
+  return lines;
+}
+
+// 对比逻辑：站点按 id，公告按 date+title，另含分组/标签/联系方式配置
 function diffRegistry(local, online) {
   const changes = [];
   const localSites = local.sites || [];
@@ -719,7 +747,7 @@ function diffRegistry(local, online) {
     if (!onlineNoticeMap[k]) {
       changes.push({ type: 'notice', status: 'add', item: n });
     } else if (JSON.stringify(onlineNoticeMap[k]) !== JSON.stringify(n)) {
-      changes.push({ type: 'notice', status: 'edit', item: n });
+      changes.push({ type: 'notice', status: 'edit', item: n, old: onlineNoticeMap[k] });
     }
   });
   onlineNotices.forEach(n => {
@@ -727,6 +755,34 @@ function diffRegistry(local, online) {
       changes.push({ type: 'notice', status: 'del', item: n });
     }
   });
+
+  // 配置类变更：分组 / 标签 / 联系方式
+  const arrDiff = (a, b) => {
+    const A = a || [], B = b || [];
+    const added = A.filter(x => !B.includes(x));
+    const removed = B.filter(x => !A.includes(x));
+    return { added, removed, changed: added.length > 0 || removed.length > 0 };
+  };
+
+  const gDiff = arrDiff(local.presetGroups, online && online.presetGroups);
+  const tDiff = arrDiff(local.presetTags, online && online.presetTags);
+  const contactChanged = JSON.stringify(local.contact || []) !== JSON.stringify((online && online.contact) || []);
+
+  if (gDiff.changed || tDiff.changed || contactChanged) {
+    const lines = [];
+    if (gDiff.added.length) lines.push(`<b>新增分组：</b>${gDiff.added.join('、')}`);
+    if (gDiff.removed.length) lines.push(`<b>删除分组：</b>${gDiff.removed.join('、')}`);
+    if (tDiff.added.length) lines.push(`<b>新增标签：</b>${tDiff.added.join('、')}`);
+    if (tDiff.removed.length) lines.push(`<b>删除标签：</b>${tDiff.removed.join('、')}`);
+    if (contactChanged) {
+      const oldC = (online && online.contact) || [];
+      const newC = local.contact || [];
+      const oldStr = oldC.map(c => (c.label || '') + ':' + (c.value || '')).join('；') || '(无)';
+      const newStr = newC.map(c => (c.label || '') + ':' + (c.value || '')).join('；') || '(无)';
+      lines.push(`<b>联系方式：</b>${oldStr} → ${newStr}`);
+    }
+    changes.unshift({ type: 'config', status: 'edit', lines });
+  }
 
   return changes;
 }
@@ -736,16 +792,37 @@ function pvCardHTML(c) {
   const badge = st === 'add' ? '<span class="pv-badge add">新增</span>'
               : st === 'edit' ? '<span class="pv-badge edit">修改</span>'
               : '<span class="pv-badge del">删除</span>';
-  if (c.type === 'site') {
-    return `<div class="pv-card ${st}">
-      <div><span class="pv-badge ${st}">${st === 'add' ? '新增' : st === 'edit' ? '修改' : '删除'}</span><span class="pv-title">${c.item.name}</span></div>
-      <div class="pv-sub">${c.item.invite || ''}</div>
+
+  // 配置变更卡片
+  if (c.type === 'config') {
+    return `<div class="pv-card edit">
+      <div><span class="pv-badge edit">配置</span><span class="pv-title">分组 / 标签 / 联系方式</span></div>
+      <div class="pv-diff">${c.lines.join('<br>')}</div>
     </div>`;
   }
+
+  if (c.type === 'site') {
+    const tagsHtml = (c.item.tags || []).length
+      ? `<div class="pv-tags">${c.item.tags.map(t => `<span class="pv-tag">${t}</span>`).join('')}</div>` : '';
+    const noteHtml = c.item.note ? `<div class="pv-note">${c.item.note}</div>` : '';
+    const diffHtml = st === 'edit' && c.old
+      ? `<div class="pv-diff">${siteDiffFields(c.old, c.item).join('<br>')}</div>` : '';
+    return `<div class="pv-card ${st}">
+      <div>${badge}<span class="pv-title">${c.item.name}</span></div>
+      <div class="pv-sub">${c.item.group || ''}　${c.item.invite || ''}</div>
+      ${tagsHtml}
+      ${noteHtml}
+      ${diffHtml}
+    </div>`;
+  }
+
   // 公告：可展开看内容
-  return `<div class="pv-card ${st}" onclick="this.querySelector('.pv-body').style.display = this.querySelector('.pv-body').style.display === 'block' ? 'none' : 'block'">
+  const diffHtml = st === 'edit' && c.old
+    ? `<div class="pv-diff">${noticeDiffFields(c.old, c.item).join('<br>')}</div>` : '';
+  return `<div class="pv-card ${st}" onclick="const b=this.querySelector('.pv-body'); if(b) b.style.display = b.style.display === 'block' ? 'none' : 'block';">
     <div>${badge}<span class="pv-title">${c.item.title}</span></div>
     <div class="pv-sub">${c.item.date || ''}${c.item.isPinned ? ' · 置顶' : ''}</div>
+    ${diffHtml}
     <div class="pv-body" style="display:none">${c.item.content}</div>
   </div>`;
 }
@@ -755,7 +832,6 @@ async function showPublishPreview() {
   const online = await fetchOnlineRegistry();
 
   if (!online) {
-    // 降级：无法对比，全量提示
     document.getElementById("modalBox").innerHTML = `
       <h3>确认发布？</h3>
       <div class="pv-warn">⚠ 无法获取线上数据进行对比，将全量发布。</div>
