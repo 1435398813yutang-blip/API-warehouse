@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "updatedAt": "2026-11-20",
+  "updatedAt": "2026-11-22",
   "notice": [
     {
       "date": "2026-11-12",
@@ -54,6 +54,18 @@
       "date": "2026-11-20",
       "title": "收录站点变动",
       "content": "【变动】\nAnAn：17:00关注册\n\n【新增】\n付费站：\n云猫、Role ai（新站有0.01太子，不确定什么时候结束）、Rbubu（目前有活动模型）\n\n有签到：\nLink",
+      "isPinned": false
+    },
+    {
+      "date": "2026-11-21",
+      "title": "收录站点变动",
+      "content": "【变动】\n少十元：公益站→有签到，网站目前维护中",
+      "isPinned": false
+    },
+    {
+      "date": "2026-11-22",
+      "title": "收录站点变动",
+      "content": "【变动】\n长春叙：链接已更新\n\n【新增】\n付费站：\n芋头饭、Anizy、萌友（五百人关注册，神秘gemini0.02大概率是4）\n\n限制签到：\n鸢尾\n有签到：\n炉边酒馆（目前所有模型0.02/次）",
       "isPinned": false
     }
   ],
@@ -725,7 +737,7 @@
     {
       "id": "s17",
       "name": "长春叙",
-      "invite": "https://changchunxu.xyz/sign-up?aff=Yroa",
+      "invite": "https://changchunxu.si/sign-up?aff=Yroa",
       "group": "有签到",
       "tags": [
         "试吃",
@@ -1285,6 +1297,61 @@
         "新增"
       ],
       "note": "QQ群1131338723，试吃0.2"
+    },
+    {
+      "id": "r_1795186539302",
+      "name": "鸢尾（irida）",
+      "invite": "https://irida.bid/sign-up?aff=FPAX",
+      "group": "限制签到",
+      "tags": [
+        "试吃",
+        "新增"
+      ],
+      "note": "试吃10，新站，签到要求昨日调用"
+    },
+    {
+      "id": "r_1795350942324",
+      "name": "芋头饭",
+      "invite": "https://api2.yutou.fun/sign-up?aff=cq6z",
+      "group": "付费站",
+      "tags": [
+        "试吃",
+        "新增"
+      ],
+      "note": "QQ群1132672027，试吃150，群里活动抽奖多"
+    },
+    {
+      "id": "r_1795351454928",
+      "name": "Anizy",
+      "invite": "https://hk.ainzy.net/sign-up?aff=Eoyk",
+      "group": "付费站",
+      "tags": [
+        "试吃",
+        "生图"
+      ],
+      "note": "试吃0.1，有生图，有无甲模型"
+    },
+    {
+      "id": "r_1795351806513",
+      "name": "炉边酒馆",
+      "invite": "https://pub.els.edu.rs/sign-up?aff=GqNE",
+      "group": "有签到",
+      "tags": [
+        "试吃",
+        "新增"
+      ],
+      "note": "QQ群1137332883，试吃12，空回自动补"
+    },
+    {
+      "id": "r_1795352160968",
+      "name": "萌友",
+      "invite": "https://mengmenguu.top/sign-up?aff=VZ0l",
+      "group": "付费站",
+      "tags": [
+        "试吃",
+        "新增"
+      ],
+      "note": "QQ群766344342，试吃0.5"
     }
   ]
 }
